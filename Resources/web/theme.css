@@ -1,0 +1,132 @@
+/* Palette seeded from ~/.config/nvim/colors/ayu-jake.vim so the viewer and the
+   editor agree on colors. Light values are ayu-light's counterparts. */
+:root {
+  color-scheme: light dark;
+
+  --bg:        #FAFAFA;
+  --fg:        #5C6773;
+  --fg-strong: #0F1419;
+  --muted:     #ABB0B6;
+  --border:    #D9D8D7;
+  --surface:   #F3F3F3;
+  --accent:    #36A3D9;
+  --heading:   #FF6A00;
+  --quote:     #86D588;
+  --code-fg:   #0F1419;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:        #0F1419;
+    --fg:        #E6E1CF;
+    --fg-strong: #FFFFFF;
+    --muted:     #5C6773;
+    --border:    #1F2830;
+    --surface:   #141B22;
+    --accent:    #36A3D9;
+    --heading:   #FFB454;
+    --quote:     #95E6CB;
+    --code-fg:   #E6E1CF;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.7 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#content {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 6rem;
+}
+
+@media (max-width: 640px) {
+  #content { padding: 2rem 1rem 4rem; }
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--heading);
+  line-height: 1.3;
+  margin: 2em 0 0.6em;
+  font-weight: 600;
+}
+h1 { font-size: 1.9rem; margin-top: 0; }
+h2 { font-size: 1.45rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+h3 { font-size: 1.2rem; }
+h4, h5, h6 { font-size: 1rem; color: var(--fg-strong); }
+
+p, ul, ol, blockquote, table, pre { margin: 0 0 1.1em; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+strong { color: var(--fg-strong); font-weight: 600; }
+
+ul, ol { padding-left: 1.5em; }
+li { margin: 0.25em 0; }
+li::marker { color: var(--muted); }
+
+/* Task lists: kill the bullet, keep the checkbox aligned. */
+li.task-list-item { list-style: none; margin-left: -1.3em; }
+li.task-list-item input { margin-right: 0.5em; }
+
+blockquote {
+  margin-left: 0;
+  padding: 0.2em 0 0.2em 1em;
+  border-left: 3px solid var(--quote);
+  color: var(--muted);
+}
+
+code {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 0.875em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.12em 0.35em;
+  color: var(--code-fg);
+}
+
+pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1em;
+  overflow-x: auto;
+}
+pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+}
+th, td { border: 1px solid var(--border); padding: 0.5em 0.8em; text-align: left; }
+th { background: var(--surface); color: var(--fg-strong); font-weight: 600; }
+
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.5em 0; }
+
+img { max-width: 100%; border-radius: 6px; }
+
+pre.mermaid {
+  background: none;
+  border: 0;
+  text-align: center;
+  padding: 0.5em 0;
+}
+
+.katex { font-size: 1.05em; }
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.4em 0; }
