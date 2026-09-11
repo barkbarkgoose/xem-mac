@@ -99,10 +99,10 @@
   // into the SVG at render time -- so re-render diagrams when it flips.
   darkQuery.addEventListener('change', function () {
     initMermaid();
-    if (lastPayload) window.geenyan.render(lastPayload);
+    if (lastPayload) window.xem.render(lastPayload);
   });
 
-  window.geenyan = {
+  window.xem = {
     render: function (payload) {
       lastPayload = payload;
       var anchor = captureAnchor();

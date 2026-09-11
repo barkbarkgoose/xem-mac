@@ -1,10 +1,10 @@
-// Makes Geenyan the default handler for markdown files. Run via `make set-default`.
+// Makes Xem the default handler for markdown files. Run via `make set-default`.
 import AppKit
 import UniformTypeIdentifiers
 
-let app = URL(fileURLWithPath: "/Applications/Geenyan.app")
+let app = URL(fileURLWithPath: "/Applications/Xem.app")
 guard FileManager.default.fileExists(atPath: app.path) else {
-    print("Geenyan.app is not installed in /Applications -- run 'make install' first.")
+    print("Xem.app is not installed in /Applications -- run 'make install' first.")
     exit(1)
 }
 guard let markdown = UTType("net.daringfireball.markdown") else {
@@ -24,4 +24,4 @@ if let failure {
     print("failed: \(failure.localizedDescription)")
     exit(1)
 }
-print("Geenyan is now the default application for markdown files.")
+print("Xem is now the default application for markdown files.")

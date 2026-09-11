@@ -1,12 +1,12 @@
-class Geenyan < Formula
+class Xem < Formula
   desc "Native macOS markdown viewer with live reload, Mermaid and math"
-  homepage "https://github.com/barkbarkgoose/geenyan"
-  url "https://github.com/barkbarkgoose/geenyan/archive/refs/tags/v1.0.0.tar.gz"
-  # PLACEHOLDER -- regenerate after pushing the v1.0.0 tag:
+  homepage "https://github.com/barkbarkgoose/xem-mac"
+  url "https://github.com/barkbarkgoose/xem-mac/archive/refs/tags/v0.1.0.tar.gz"
+  # PLACEHOLDER -- regenerate after pushing the v0.1.0 tag:
   #   curl -sL <url above> | shasum -a 256
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
-  head "https://github.com/barkbarkgoose/geenyan.git", branch: "main"
+  head "https://github.com/barkbarkgoose/xem-mac.git", branch: "main"
 
   depends_on macos: :sonoma
 
@@ -17,38 +17,38 @@ class Geenyan < Formula
     # Ad-hoc signature. Locally built code is never quarantined, so this is
     # purely to give LaunchServices a stable bundle identity.
     system "codesign", "--force", "--sign", "-", "--timestamp=none",
-           "build/Geenyan.app"
+           "build/Xem.app"
 
-    prefix.install "build/Geenyan.app"
-    bin.install "scripts/geenyan"
+    prefix.install "build/Xem.app"
+    bin.install "scripts/xem"
     doc.install "README.md", "THIRD-PARTY.md"
   end
 
   def caveats
     <<~EOS
-      The `geenyan` command is ready to use.
+      The `xem` command is ready to use.
 
       To open .md files from Finder, link the app into /Applications:
-        ln -sfn #{opt_prefix}/Geenyan.app /Applications/Geenyan.app
+        ln -sfn #{opt_prefix}/Xem.app /Applications/Xem.app
 
       Then set it as the default handler:
-        right-click any .md -> Get Info -> Open With -> Geenyan -> Change All
+        right-click any .md -> Get Info -> Open With -> Xem -> Change All
     EOS
   end
 
   # Deliberately headless: a --snapshot test would need a WindowServer, which
   # the test sandbox and CI runners do not have.
   test do
-    assert_path_exists prefix/"Geenyan.app/Contents/MacOS/geenyan"
+    assert_path_exists prefix/"Xem.app/Contents/MacOS/xem"
 
     bundle_id = shell_output(
       "/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' " \
-      "#{prefix}/Geenyan.app/Contents/Info.plist",
+      "#{prefix}/Xem.app/Contents/Info.plist",
     ).strip
-    assert_equal "com.barkbarkgoose.geenyan", bundle_id
+    assert_equal "com.barkbarkgoose.xem", bundle_id
 
     # Reaching the "no such file" check proves the launcher located the app
     # bundle next to itself in the Cellar.
-    assert_match "no such file", shell_output("#{bin}/geenyan /nonexistent.md 2>&1", 1)
+    assert_match "no such file", shell_output("#{bin}/xem /nonexistent.md 2>&1", 1)
   end
 end

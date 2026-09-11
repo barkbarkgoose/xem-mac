@@ -1,9 +1,9 @@
-# Geenyan
+# Xem
 
 A small native macOS markdown viewer. Open a `.md` file, keep editing it in your
 editor, and the window re-renders on every save.
 
-The name is a play on *ghi nhanh* — Vietnamese for "jot down".
+*Xem* is Vietnamese for "to look at" — which is all this does.
 
 - Native Swift + `WKWebView`, ~3.7 MB installed, launches instantly
 - GitHub-flavored markdown, syntax highlighting, tables, task lists
@@ -15,7 +15,7 @@ The name is a play on *ghi nhanh* — Vietnamese for "jot down".
 ## Install
 
 ```sh
-brew install barkbarkgoose/tap/geenyan
+brew install barkbarkgoose/tap/xem
 ```
 
 Homebrew compiles it locally, which means Gatekeeper is never involved — there is
@@ -25,10 +25,10 @@ never quarantined.
 To open `.md` files from Finder, link the app into `/Applications`:
 
 ```sh
-ln -sfn "$(brew --prefix)/opt/geenyan/Geenyan.app" /Applications/Geenyan.app
+ln -sfn "$(brew --prefix)/opt/xem/Xem.app" /Applications/Xem.app
 ```
 
-Then right-click any `.md` → Get Info → Open With → Geenyan → Change All.
+Then right-click any `.md` → Get Info → Open With → Xem → Change All.
 
 ### From source
 
@@ -37,16 +37,16 @@ no `.xcodeproj` — `xcodebuild` will not work here.
 
 ```sh
 make install       # build, bundle, ad-hoc sign, copy to /Applications, register
-make install-cli   # symlink the `geenyan` launcher into ~/.local/bin
+make install-cli   # symlink the `xem` launcher into ~/.local/bin
 make set-default   # optional: claim the .md association
 ```
 
 ## Usage
 
 ```sh
-geenyan notes.md         # open a file
-geenyan -                # read markdown from stdin
-some-command | geenyan   # same
+xem notes.md         # open a file
+xem -                # read markdown from stdin
+some-command | xem   # same
 ```
 
 Reopening a file that is already open focuses its window instead of duplicating it.
@@ -55,14 +55,14 @@ Reopening a file that is already open focuses its window instead of duplicating 
 
 | Path | Purpose |
 |------|---------|
-| `Sources/geenyan/FileWatcher.swift` | Live reload. Re-arms across atomic saves. |
-| `Sources/geenyan/MarkdownWebView.swift` | `WKWebView` host and the JS bridge. |
-| `Sources/geenyan/DocumentWindowController.swift` | One window per document. |
-| `Sources/geenyan/Snapshot.swift` | `--snapshot in.md out.png`, for verification. |
+| `Sources/xem/FileWatcher.swift` | Live reload. Re-arms across atomic saves. |
+| `Sources/xem/MarkdownWebView.swift` | `WKWebView` host and the JS bridge. |
+| `Sources/xem/DocumentWindowController.swift` | One window per document. |
+| `Sources/xem/Snapshot.swift` | `--snapshot in.md out.png`, for verification. |
 | `Resources/web/app.js` | markdown-it pipeline, mermaid, KaTeX, scroll restore. |
 | `Resources/web/theme.css` | Palette and layout. |
 | `scripts/make-plist.sh` | Generates `Info.plist`, including the UTI claims. |
-| `Formula/geenyan.rb` | Homebrew formula, mirrored into the tap repo. |
+| `Formula/xem.rb` | Homebrew formula, mirrored into the tap repo. |
 
 ## Notes on three things that are easy to get wrong
 
@@ -86,8 +86,8 @@ the window, leaving no way to move it.
 
 ```sh
 make bundle
-./build/Geenyan.app/Contents/MacOS/geenyan --snapshot some.md /tmp/out.png
-GEENYAN_SNAPSHOT_LIGHT=1 ./build/Geenyan.app/Contents/MacOS/geenyan --snapshot some.md /tmp/light.png
+./build/Xem.app/Contents/MacOS/xem --snapshot some.md /tmp/out.png
+XEM_SNAPSHOT_LIGHT=1 ./build/Xem.app/Contents/MacOS/xem --snapshot some.md /tmp/light.png
 ```
 
 `--snapshot` renders offscreen through the real WebKit pipeline and writes a PNG, so
@@ -96,17 +96,17 @@ WindowServer, so it is not usable from CI or a Homebrew sandbox.
 
 ## Releasing
 
-1. Bump `VERSION` in the `Makefile` and tag: `git tag v1.0.1 && git push --tags`
-2. Update `url` and `sha256` in `Formula/geenyan.rb`:
+1. Bump `VERSION` in the `Makefile` and tag: `git tag v0.1.1 && git push --tags`
+2. Update `url` and `sha256` in `Formula/xem.rb`:
    ```sh
-   curl -sL https://github.com/barkbarkgoose/geenyan/archive/refs/tags/v1.0.1.tar.gz | shasum -a 256
+   curl -sL https://github.com/barkbarkgoose/xem-mac/archive/refs/tags/v0.1.1.tar.gz | shasum -a 256
    ```
 3. Copy the formula into the `homebrew-tap` repo and push.
 
 ## Uninstall
 
 ```sh
-brew uninstall geenyan          # if installed via brew
-rm -f /Applications/Geenyan.app # the symlink, if you made one
+brew uninstall xem          # if installed via brew
+rm -f /Applications/Xem.app # the symlink, if you made one
 make uninstall                  # if installed from source
 ```

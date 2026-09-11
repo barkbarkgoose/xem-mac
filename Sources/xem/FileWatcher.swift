@@ -9,7 +9,7 @@ import Foundation
 final class FileWatcher {
     private let url: URL
     private let onChange: () -> Void
-    private let queue = DispatchQueue(label: "geenyan.filewatcher")
+    private let queue = DispatchQueue(label: "xem.filewatcher")
 
     private var source: DispatchSourceFileSystemObject?
     private var dirSource: DispatchSourceFileSystemObject?

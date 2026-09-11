@@ -69,7 +69,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
             // Fall back to a lenient decode -- better a mojibake render than a
             // blank window when a file is not valid UTF-8.
             guard let data = try? Data(contentsOf: url) else {
-                NSLog("geenyan: cannot read \(url.path): \(error)")
+                NSLog("xem: cannot read \(url.path): \(error)")
                 return
             }
             text = String(decoding: data, as: UTF8.self)

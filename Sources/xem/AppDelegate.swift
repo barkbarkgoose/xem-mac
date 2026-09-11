@@ -20,11 +20,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func openDocument(_ url: URL) {
         let key = url.resolvingSymlinksInPath().standardizedFileURL.path
         if let existing = controllers[key] {
-            NSLog("geenyan: focus existing window for %@", key)
+            NSLog("xem: focus existing window for %@", key)
             existing.showAndFocus()
             return
         }
-        NSLog("geenyan: open new window for %@ (%d already open)", key, controllers.count)
+        NSLog("xem: open new window for %@ (%d already open)", key, controllers.count)
         let controller = DocumentWindowController(url: url) { [weak self] closed in
             let closedKey = closed.url.resolvingSymlinksInPath().standardizedFileURL.path
             self?.controllers.removeValue(forKey: closedKey)
@@ -47,10 +47,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About Geenyan", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "About Xem", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Hide Geenyan", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        appMenu.addItem(withTitle: "Quit Geenyan", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Hide Xem", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: "Quit Xem", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         main.addItem(appItem)
 

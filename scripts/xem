@@ -1,13 +1,13 @@
 #!/bin/bash
-# Open a markdown file (or piped markdown) in Geenyan.app.
+# Open a markdown file (or piped markdown) in Xem.app.
 set -euo pipefail
 
 # Locate the app bundle. Homebrew installs it alongside this script inside the
 # Cellar, so look there first; fall back to a normal /Applications install.
 resolve_app() {
-    if [ -n "${GEENYAN_APP:-}" ]; then
-        [ -d "$GEENYAN_APP" ] || return 1
-        printf '%s' "$GEENYAN_APP"
+    if [ -n "${XEM_APP:-}" ]; then
+        [ -d "$XEM_APP" ] || return 1
+        printf '%s' "$XEM_APP"
         return
     fi
 
@@ -20,7 +20,7 @@ resolve_app() {
     done
     dir="$(cd -P "$(dirname "$src")" && pwd)"
 
-    for candidate in "$dir/../Geenyan.app" "$dir/../../Geenyan.app" "/Applications/Geenyan.app"; do
+    for candidate in "$dir/../Xem.app" "$dir/../../Xem.app" "/Applications/Xem.app"; do
         if [ -d "$candidate" ]; then
             printf '%s' "$(cd "$candidate" && pwd)"
             return
@@ -30,16 +30,16 @@ resolve_app() {
 }
 
 if ! APP="$(resolve_app)"; then
-    if [ -n "${GEENYAN_APP:-}" ]; then
-        echo "geenyan: GEENYAN_APP is set to '$GEENYAN_APP', which is not an app bundle." >&2
+    if [ -n "${XEM_APP:-}" ]; then
+        echo "xem: XEM_APP is set to '$XEM_APP', which is not an app bundle." >&2
     else
-        echo "geenyan: Geenyan.app not found (looked next to this script and in /Applications)." >&2
-        echo "         Set GEENYAN_APP to its path, or run 'make install'." >&2
+        echo "xem: Xem.app not found (looked next to this script and in /Applications)." >&2
+        echo "         Set XEM_APP to its path, or run 'make install'." >&2
     fi
     exit 1
 fi
 
-usage() { echo "usage: geenyan <file.md> | geenyan -   (or pipe into geenyan)" >&2; exit 2; }
+usage() { echo "usage: xem <file.md> | xem -   (or pipe into xem)" >&2; exit 2; }
 
 target=""
 
@@ -57,13 +57,13 @@ else
 fi
 
 if [ "$target" = "-" ]; then
-    tmp="${TMPDIR:-/tmp}/geenyan-$$-stdin.md"
+    tmp="${TMPDIR:-/tmp}/xem-$$-stdin.md"
     cat > "$tmp"
-    [ -s "$tmp" ] || { rm -f "$tmp"; echo "geenyan: empty input" >&2; exit 1; }
+    [ -s "$tmp" ] || { rm -f "$tmp"; echo "xem: empty input" >&2; exit 1; }
     abs="$tmp"
 else
-    [ -e "$target" ] || { echo "geenyan: no such file: $target" >&2; exit 1; }
-    [ -f "$target" ] || { echo "geenyan: not a regular file: $target" >&2; exit 1; }
+    [ -e "$target" ] || { echo "xem: no such file: $target" >&2; exit 1; }
+    [ -f "$target" ] || { echo "xem: not a regular file: $target" >&2; exit 1; }
     # Resolve to an absolute path; `open` is not reliably cwd-relative.
     abs="$(cd "$(dirname "$target")" && pwd)/$(basename "$target")"
 fi

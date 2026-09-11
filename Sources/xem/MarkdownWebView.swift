@@ -22,7 +22,7 @@ final class MarkdownWebView: WKWebView {
 
     func loadRenderer() {
         guard let root = Bundle.main.resourceURL?.appendingPathComponent("web") else {
-            NSLog("geenyan: web resources missing from bundle")
+            NSLog("xem: web resources missing from bundle")
             return
         }
         // Read access is granted at "/" rather than the web root: documents
@@ -45,8 +45,8 @@ final class MarkdownWebView: WKWebView {
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8)
         else { return }
-        evaluateJavaScript("window.geenyan.render(\(json));") { _, error in
-            if let error { NSLog("geenyan: render failed: \(error)") }
+        evaluateJavaScript("window.xem.render(\(json));") { _, error in
+            if let error { NSLog("xem: render failed: \(error)") }
         }
     }
 }

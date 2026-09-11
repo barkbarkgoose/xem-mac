@@ -1,6 +1,6 @@
 # Third-party components
 
-Geenyan bundles the following libraries in `Resources/web/vendor/`, unmodified.
+Xem bundles the following libraries in `Resources/web/vendor/`, unmodified.
 They are committed to this repository so the app renders entirely offline.
 
 | Component | Version | License |

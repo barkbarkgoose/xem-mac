@@ -3,7 +3,7 @@ import WebKit
 
 /// Headless render-to-PNG, used to verify the real WebKit pipeline (Mermaid and
 /// KaTeX in particular) without a visible window:
-///     geenyan --snapshot <in.md> <out.png>
+///     xem --snapshot <in.md> <out.png>
 final class Snapshotter: NSObject {
     private let input: URL
     private let output: URL
@@ -23,9 +23,9 @@ final class Snapshotter: NSObject {
             contentRect: NSRect(x: -10000, y: -10000, width: 1000, height: 1400),
             styleMask: [.borderless], backing: .buffered, defer: false
         )
-        // GEENYAN_SNAPSHOT_LIGHT=1 forces the light palette for verification,
+        // XEM_SNAPSHOT_LIGHT=1 forces the light palette for verification,
         // regardless of the system appearance.
-        if ProcessInfo.processInfo.environment["GEENYAN_SNAPSHOT_LIGHT"] == "1" {
+        if ProcessInfo.processInfo.environment["XEM_SNAPSHOT_LIGHT"] == "1" {
             window.appearance = NSAppearance(named: .aqua)
         }
         window.contentView = webView
@@ -76,7 +76,7 @@ final class Snapshotter: NSObject {
     }
 
     private func fail(_ message: String) {
-        FileHandle.standardError.write(Data("geenyan --snapshot: \(message)\n".utf8))
+        FileHandle.standardError.write(Data("xem --snapshot: \(message)\n".utf8))
         exit(1)
     }
 }

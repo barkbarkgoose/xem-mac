@@ -11,7 +11,7 @@ app.setActivationPolicy(.regular)
 let args = CommandLine.arguments
 if let flag = args.firstIndex(of: "--snapshot") {
     guard args.count > flag + 2 else {
-        FileHandle.standardError.write(Data("usage: geenyan --snapshot <in.md> <out.png>\n".utf8))
+        FileHandle.standardError.write(Data("usage: xem --snapshot <in.md> <out.png>\n".utf8))
         exit(2)
     }
     app.setActivationPolicy(.accessory)
@@ -24,7 +24,7 @@ if let flag = args.firstIndex(of: "--snapshot") {
 }
 
 // Paths passed straight on argv (the CLI shim uses `open`, but this keeps
-// `Geenyan.app/Contents/MacOS/geenyan file.md` working for debugging).
+// `Xem.app/Contents/MacOS/xem file.md` working for debugging).
 let fileArgs = CommandLine.arguments.dropFirst().filter { !$0.hasPrefix("-") }
 if !fileArgs.isEmpty {
     DispatchQueue.main.async {

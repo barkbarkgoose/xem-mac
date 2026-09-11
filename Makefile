@@ -1,7 +1,7 @@
-APP        := Geenyan
-BUNDLE_ID  := com.barkbarkgoose.geenyan
-VERSION    := 1.0.0
-BIN        := geenyan
+APP        := Xem
+BUNDLE_ID  := com.barkbarkgoose.xem
+VERSION    := 0.1.0
+BIN        := xem
 BUILD_DIR  := build
 APP_DIR    := $(BUILD_DIR)/$(APP).app
 CONTENTS   := $(APP_DIR)/Contents
@@ -41,8 +41,8 @@ install: sign
 
 install-cli:
 	mkdir -p $$HOME/.local/bin
-	ln -sf $(CURDIR)/scripts/geenyan $$HOME/.local/bin/geenyan
-	@echo "Linked geenyan -> ~/.local/bin/geenyan"
+	ln -sf $(CURDIR)/scripts/xem $$HOME/.local/bin/xem
+	@echo "Linked xem -> ~/.local/bin/xem"
 
 # Opt-in: takes the system-wide .md association away from whatever holds it now.
 set-default:
@@ -53,7 +53,7 @@ set-default:
 uninstall:
 	-$(LSREGISTER) -u /Applications/$(APP).app
 	rm -rf /Applications/$(APP).app
-	rm -f $$HOME/.local/bin/geenyan
+	rm -f $$HOME/.local/bin/xem
 	@echo "Uninstalled $(APP)."
 
 
