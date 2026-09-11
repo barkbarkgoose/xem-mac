@@ -15,8 +15,13 @@ editor, and the window re-renders on every save.
 ## Install
 
 ```sh
-brew install barkbarkgoose/tap/xem
+brew install --HEAD barkbarkgoose/tap/xem
 ```
+
+`--HEAD` is required: `xem-mac` is a private repo, so the tagged source tarball
+that the stable formula points at is not fetchable and its `sha256` is still a
+placeholder. Installing therefore needs repo access and a working SSH key. Drop
+the flag once the repo is public and the sha is filled in.
 
 Homebrew compiles it locally, which means Gatekeeper is never involved — there is
 no "unidentified developer" prompt to click through, because locally built code is
@@ -106,7 +111,7 @@ WindowServer, so it is not usable from CI or a Homebrew sandbox.
 ## Uninstall
 
 ```sh
-brew uninstall xem          # if installed via brew
-rm -f /Applications/Xem.app # the symlink, if you made one
-make uninstall                  # if installed from source
+brew uninstall xem           # if installed via brew
+rm -f /Applications/Xem.app  # the symlink, if you made one
+make uninstall               # if installed from source
 ```
