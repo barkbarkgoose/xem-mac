@@ -2,11 +2,14 @@ class Xem < Formula
   desc "Native macOS markdown viewer with live reload, Mermaid and math"
   homepage "https://github.com/barkbarkgoose/xem-mac"
   url "https://github.com/barkbarkgoose/xem-mac/archive/refs/tags/v0.1.0.tar.gz"
-  # PLACEHOLDER -- regenerate after pushing the v0.1.0 tag:
+  # PLACEHOLDER -- the repo is private, so this tarball 404s for an
+  # unauthenticated fetch. Regenerate once the repo is public:
   #   curl -sL <url above> | shasum -a 256
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
-  head "https://github.com/barkbarkgoose/xem-mac.git", branch: "main"
+  # SSH: the repo is private, so an HTTPS clone has no credential to offer.
+  # Installing needs repo access and a working SSH key.
+  head "ssh://git@github.com/barkbarkgoose/xem-mac.git", branch: "main", using: :git
 
   depends_on macos: :sonoma
 
