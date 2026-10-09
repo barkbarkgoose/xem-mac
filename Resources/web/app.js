@@ -103,6 +103,13 @@
   });
 
   window.xem = {
+    /// Text-only zoom. Reflowing changes every heading's offset, so keep the
+    /// reader's place the same way a re-render does.
+    setTextScale: function (scale) {
+      var anchor = captureAnchor();
+      document.documentElement.style.setProperty('--text-scale', String(scale));
+      restoreAnchor(anchor);
+    },
     render: function (payload) {
       lastPayload = payload;
       var anchor = captureAnchor();

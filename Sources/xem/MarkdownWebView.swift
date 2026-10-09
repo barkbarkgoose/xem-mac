@@ -8,6 +8,23 @@ final class MarkdownWebView: WKWebView {
     private var isReady = false
     private var pending: (text: String, baseDir: String)?
 
+    private static let scaleKey = "textScale"
+    private static let scaleRange = 0.5...3.0
+    private static let scaleStep = 0.1
+
+    /// Text-only zoom, shared by every window and remembered across launches.
+    private var textScale: Double {
+        get {
+            let saved = UserDefaults.standard.double(forKey: Self.scaleKey)
+            return saved == 0 ? 1.0 : saved
+        }
+        set {
+            let clamped = min(max(newValue, Self.scaleRange.lowerBound), Self.scaleRange.upperBound)
+            // Round away float drift from repeated 0.1 steps.
+            UserDefaults.standard.set((clamped * 100).rounded() / 100, forKey: Self.scaleKey)
+        }
+    }
+
     init() {
         let config = WKWebViewConfiguration()
         config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
@@ -19,6 +36,36 @@ final class MarkdownWebView: WKWebView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not supported") }
+
+    @objc func textZoomIn(_ sender: Any?) { adjustTextScale(by: Self.scaleStep) }
+    @objc func textZoomOut(_ sender: Any?) { adjustTextScale(by: -Self.scaleStep) }
+    @objc func textZoomReset(_ sender: Any?) {
+        textScale = 1.0
+        applyTextScale()
+    }
+
+    private func adjustTextScale(by delta: Double) {
+        textScale += delta
+        applyTextScale()
+    }
+
+    private func applyTextScale() {
+        guard isReady else { return }
+        evaluateJavaScript("window.xem.setTextScale(\(textScale));") { _, error in
+            if let error { NSLog("xem: setTextScale failed: \(error)") }
+        }
+    }
+
+    /// The menu claims Cmd-+ (Cmd-Shift-=); most keyboards press plain Cmd-=,
+    /// which would otherwise be dropped.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if mods == .command, event.charactersIgnoringModifiers == "=" {
+            textZoomIn(nil)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 
     func loadRenderer() {
         guard let root = Bundle.main.resourceURL?.appendingPathComponent("web") else {
@@ -54,6 +101,7 @@ final class MarkdownWebView: WKWebView {
 extension MarkdownWebView: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         isReady = true
+        applyTextScale()
         if let pending {
             self.pending = nil
             render(markdown: pending.text, baseDir: pending.baseDir)

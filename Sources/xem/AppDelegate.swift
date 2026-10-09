@@ -70,6 +70,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let viewItem = NSMenuItem()
         let viewMenu = NSMenu(title: "View")
+        viewMenu.addItem(withTitle: "Actual Size", action: #selector(MarkdownWebView.textZoomReset(_:)), keyEquivalent: "0")
+        viewMenu.addItem(withTitle: "Zoom In", action: #selector(MarkdownWebView.textZoomIn(_:)), keyEquivalent: "+")
+        viewMenu.addItem(withTitle: "Zoom Out", action: #selector(MarkdownWebView.textZoomOut(_:)), keyEquivalent: "-")
+        viewMenu.addItem(.separator())
         viewMenu.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
         viewItem.submenu = viewMenu
         main.addItem(viewItem)

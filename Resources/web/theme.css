@@ -32,11 +32,16 @@
 
 * { box-sizing: border-box; }
 
+/* --text-scale is set from app.js (Cmd +/-/0). Every size below is rem or em,
+   so scaling the root font size scales text, spacing and the column width
+   together, while images (px / %) keep their size. */
+html { font-size: calc(16px * var(--text-scale, 1)); }
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font: 16px/1.7 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  font: 1rem/1.7 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
