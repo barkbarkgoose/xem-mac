@@ -6,6 +6,17 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
     private var watcher: FileWatcher?
     private var onClose: ((DocumentWindowController) -> Void)?
     private var didEnsureTabBar = false
+    private lazy var findBar: FindBarViewController = {
+        let bar = FindBarViewController()
+        bar.layoutAttribute = .bottom
+        bar.isHidden = true
+        bar.onFind = { [weak self] query, backwards, incremental in
+            self?.find(query, backwards: backwards, incremental: incremental)
+        }
+        bar.onClose = { [weak self] in self?.hideFindBar() }
+        bar.onClear = { [weak self] in self?.webView.clearFind() }
+        return bar
+    }()
 
     init(url: URL, onClose: @escaping (DocumentWindowController) -> Void) {
         self.url = url
@@ -70,6 +81,52 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
             if let window, window.tabGroup?.isTabBarVisible == false {
                 window.toggleTabBar(nil)
             }
+        }
+    }
+
+    // MARK: Find
+
+    @objc func showFindBar(_ sender: Any?) {
+        guard let window else { return }
+        if findBar.parent == nil { window.addTitlebarAccessoryViewController(findBar) }
+        findBar.isHidden = false
+        // Seed with the page selection, like every other macOS find.
+        webView.selectedText { [weak self] text in
+            guard let self else { return }
+            if let text, !text.isEmpty, !text.contains("\n") { self.findBar.query = text }
+            self.findBar.focus()
+        }
+    }
+
+    private func hideFindBar() {
+        findBar.isHidden = true
+        webView.clearFind()
+        findBar.showResult(count: 0, index: -1)
+        window?.makeFirstResponder(webView)
+    }
+
+    @objc func findNext(_ sender: Any?) { runFind(backwards: false) }
+    @objc func findPrevious(_ sender: Any?) { runFind(backwards: true) }
+
+    @objc func useSelectionForFind(_ sender: Any?) {
+        webView.selectedText { [weak self] text in
+            guard let self, let text, !text.isEmpty else { return }
+            self.findBar.query = text
+        }
+    }
+
+    private func runFind(backwards: Bool) {
+        // Cmd-G with the bar closed opens it rather than doing nothing.
+        guard !findBar.isHidden, findBar.parent != nil else {
+            showFindBar(nil)
+            return
+        }
+        findBar.search(backwards: backwards)
+    }
+
+    private func find(_ query: String, backwards: Bool, incremental: Bool) {
+        webView.find(query, backwards: backwards, restart: incremental) { [weak self] count, index in
+            self?.findBar.showResult(count: count, index: index)
         }
     }
 

@@ -13,6 +13,8 @@
   --heading:   #FF6A00;
   --quote:     #86D588;
   --code-fg:   #0F1419;
+  --find-bg:        #FFE08A;
+  --find-active-bg: #FF9F43;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,7 +29,21 @@
     --heading:   #FFB454;
     --quote:     #95E6CB;
     --code-fg:   #E6E1CF;
+    --find-bg:        #6B5A1F;
+    --find-active-bg: #C77712;
   }
+}
+
+/* Find-in-page highlights (app.js). The overrides in app.js's setFindColors
+   set the same variables inline on <html>, so they win over both palettes. */
+mark.xem-find {
+  background: var(--find-bg);
+  color: inherit;
+  border-radius: 0.15em;
+}
+mark.xem-find-active {
+  background: var(--find-active-bg);
+  outline: 0.1em solid var(--find-active-bg);
 }
 
 * { box-sizing: border-box; }

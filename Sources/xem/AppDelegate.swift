@@ -35,22 +35,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSDocumentController.shared.noteNewRecentDocumentURL(url)
     }
 
+    private var settingsController: SettingsWindowController?
+
+    @objc private func showSettings(_ sender: Any?) {
+        if settingsController == nil { settingsController = SettingsWindowController() }
+        settingsController?.showAndFocus()
+    }
+
     @objc private func openFile(_ sender: Any?) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.init(filenameExtension: "md")].compactMap { $0 }
         panel.allowsOtherFileTypes = true
         panel.canChooseDirectories = false
         if panel.runModal() == .OK, let url = panel.url { openDocument(url) }
-    }
-
-    private func findItem(
-        _ title: String, _ action: NSTextFinder.Action, key: String, mods: NSEvent.ModifierFlags
-    ) -> NSMenuItem {
-        let item = NSMenuItem(
-            title: title, action: #selector(NSResponder.performTextFinderAction(_:)), keyEquivalent: key)
-        item.keyEquivalentModifierMask = mods
-        item.tag = action.rawValue
-        return item
     }
 
     /// Tab switching keys. A local monitor runs before the web view sees the
@@ -81,6 +78,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Xem", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Settings…", action: #selector(showSettings(_:)), keyEquivalent: ",")
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide Xem", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(withTitle: "Quit Xem", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
@@ -98,11 +97,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editMenu.addItem(.separator())
-        // WKWebView implements the system find bar; the item's tag picks the action.
-        editMenu.addItem(findItem("Find…", .showFindInterface, key: "f", mods: .command))
-        editMenu.addItem(findItem("Find Next", .nextMatch, key: "g", mods: .command))
-        editMenu.addItem(findItem("Find Previous", .previousMatch, key: "g", mods: [.command, .shift]))
-        editMenu.addItem(findItem("Use Selection for Find", .setSearchString, key: "e", mods: .command))
+        // Handled by DocumentWindowController (WKWebView has no built-in find UI).
+        let find = editMenu.addItem(withTitle: "Find…", action: #selector(DocumentWindowController.showFindBar(_:)), keyEquivalent: "f")
+        find.keyEquivalentModifierMask = .command
+        editMenu.addItem(withTitle: "Find Next", action: #selector(DocumentWindowController.findNext(_:)), keyEquivalent: "g")
+        let prevFind = editMenu.addItem(withTitle: "Find Previous", action: #selector(DocumentWindowController.findPrevious(_:)), keyEquivalent: "G")
+        prevFind.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(withTitle: "Use Selection for Find", action: #selector(DocumentWindowController.useSelectionForFind(_:)), keyEquivalent: "e")
         editItem.submenu = editMenu
         main.addItem(editItem)
 

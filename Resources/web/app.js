@@ -95,12 +95,119 @@
   var renderToken = 0;
   var lastPayload = null;
 
+  // ---- Find in page ------------------------------------------------------
+  // WKWebView.find only ever selects one match, so highlighting all of them is
+  // done here: every match is wrapped in <mark class="xem-find">, the current
+  // one also gets .xem-find-active. Colors come from --find-* in theme.css.
+  var findQuery = '';
+  var findMarks = [];
+  var findIndex = -1;
+
+  function clearFindMarks() {
+    var parents = [];
+    findMarks.forEach(function (mark) {
+      var parent = mark.parentNode;
+      if (!parent) return;
+      parent.replaceChild(document.createTextNode(mark.textContent), mark);
+      if (parents.indexOf(parent) < 0) parents.push(parent);
+    });
+    // Re-join the text nodes that wrapping split apart.
+    parents.forEach(function (parent) { parent.normalize(); });
+    findMarks = [];
+    findIndex = -1;
+  }
+
+  /// Text nodes worth searching: not diagram SVG, not KaTeX's duplicated
+  /// MathML/HTML trees (wrapping inside those breaks the layout).
+  function findTextNodes() {
+    var nodes = [];
+    var walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (node) {
+        if (!node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        for (var el = node.parentElement; el && el !== content; el = el.parentElement) {
+          if (el.tagName === 'svg' || el.classList.contains('katex') ||
+              el.classList.contains('mermaid')) return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    return nodes;
+  }
+
+  function highlightAll(query) {
+    var re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    findTextNodes().forEach(function (node) {
+      var text = node.nodeValue;
+      var match, last = 0, frag = null;
+      re.lastIndex = 0;
+      while ((match = re.exec(text)) !== null) {
+        if (!match[0].length) { re.lastIndex++; continue; }
+        frag = frag || document.createDocumentFragment();
+        if (match.index > last) frag.appendChild(document.createTextNode(text.slice(last, match.index)));
+        var mark = document.createElement('mark');
+        mark.className = 'xem-find';
+        mark.textContent = match[0];
+        frag.appendChild(mark);
+        findMarks.push(mark);
+        last = match.index + match[0].length;
+      }
+      if (frag) {
+        if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+        node.parentNode.replaceChild(frag, node);
+      }
+    });
+  }
+
+  function setActiveMatch(index, scroll) {
+    if (findIndex >= 0 && findMarks[findIndex]) findMarks[findIndex].classList.remove('xem-find-active');
+    findIndex = index;
+    var mark = findMarks[index];
+    if (!mark) return;
+    mark.classList.add('xem-find-active');
+    if (scroll) mark.scrollIntoView({ block: 'center', inline: 'nearest' });
+  }
+
+  function findStatus() {
+    return { count: findMarks.length, index: findIndex };
+  }
+
+  /// First match at or below `y` (document coordinates), else the first match.
+  function firstMatchFrom(y) {
+    for (var i = 0; i < findMarks.length; i++) {
+      if (findMarks[i].getBoundingClientRect().top + window.scrollY >= y - 1) return i;
+    }
+    return 0;
+  }
+
   // CSS follows the system appearance on its own, but mermaid bakes its theme
   // into the SVG at render time -- so re-render diagrams when it flips.
   darkQuery.addEventListener('change', function () {
+    applyFindColors();
     initMermaid();
     if (lastPayload) window.xem.render(lastPayload);
   });
+
+  var findColorPrefs = {};
+
+  /// Inline custom properties on <html> beat both palettes in theme.css, so
+  /// they are set for the current appearance and cleared otherwise.
+  function applyFindColors() {
+    var colors = findColorPrefs[darkQuery.matches ? 'dark' : 'light'] || {};
+    var root = document.documentElement.style;
+    [['match', '--find-bg'], ['active', '--find-active-bg']].forEach(function (pair) {
+      var value = colors[pair[0]];
+      if (value) root.setProperty(pair[1], value); else root.removeProperty(pair[1]);
+    });
+  }
+
+  /// A save re-renders the page; keep the active search alive across it.
+  function reapplyFind() {
+    if (!findQuery) return;
+    var q = findQuery;
+    findQuery = '';
+    window.xem.find(q, false, true);
+  }
 
   window.xem = {
     /// Text-only zoom. Reflowing changes every heading's offset, so keep the
@@ -110,11 +217,46 @@
       document.documentElement.style.setProperty('--text-scale', String(scale));
       restoreAnchor(anchor);
     },
+    /// Highlight every match of `query`. `restart` re-runs the search (typing,
+    /// or the document changed); otherwise this steps to the next/previous
+    /// match. Returns {count, index} for the find bar's "3 of 12".
+    find: function (query, backwards, restart) {
+      if (!query) { return window.xem.clearFind(); }
+      if (restart || query !== findQuery) {
+        // Stay near where the reader is: the current match if there is one.
+        var from = window.scrollY;
+        if (findMarks[findIndex]) from = findMarks[findIndex].getBoundingClientRect().top + window.scrollY;
+        clearFindMarks();
+        findQuery = query;
+        highlightAll(query);
+        if (findMarks.length) setActiveMatch(firstMatchFrom(from), true);
+        return findStatus();
+      }
+      if (!findMarks.length) return findStatus();
+      var n = findMarks.length;
+      setActiveMatch((findIndex + (backwards ? -1 : 1) + n) % n, true);
+      return findStatus();
+    },
+    clearFind: function () {
+      clearFindMarks();
+      findQuery = '';
+      return findStatus();
+    },
+    /// Per-appearance overrides for --find-bg / --find-active-bg, as
+    /// {light: {match, active}, dark: {match, active}}. Missing entries fall
+    /// back to the theme.css defaults.
+    setFindColors: function (prefs) {
+      findColorPrefs = prefs || {};
+      applyFindColors();
+    },
     render: function (payload) {
       lastPayload = payload;
       var anchor = captureAnchor();
       var token = ++renderToken;
 
+      // The old marks die with the old DOM; reapplyFind rebuilds them below.
+      findMarks = [];
+      findIndex = -1;
       content.innerHTML = md.render(payload.markdown || '');
       rewriteRelativePaths(content, payload.baseDir);
 
@@ -139,10 +281,11 @@
           .catch(function (e) { console.error('mermaid:', e); })
           .finally(function () {
             // A later render may have landed while mermaid was working.
-            if (token === renderToken) restoreAnchor(anchor);
+            if (token === renderToken) { restoreAnchor(anchor); reapplyFind(); }
           });
       } else {
         restoreAnchor(anchor);
+        reapplyFind();
       }
     }
   };

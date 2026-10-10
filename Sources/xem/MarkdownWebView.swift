@@ -32,6 +32,9 @@ final class MarkdownWebView: WKWebView {
         setValue(false, forKey: "drawsBackground")
         if #available(macOS 13.3, *) { isInspectable = true }
         navigationDelegate = self
+        NotificationCenter.default.addObserver(
+            forName: FindColors.didChange, object: nil, queue: .main
+        ) { [weak self] _ in self?.applyFindColors() }
     }
 
     @available(*, unavailable)
@@ -65,6 +68,47 @@ final class MarkdownWebView: WKWebView {
             return true
         }
         return super.performKeyEquivalent(with: event)
+    }
+
+    /// The page's current selection, if any.
+    func selectedText(_ completion: @escaping (String?) -> Void) {
+        evaluateJavaScript("window.getSelection().toString()") { result, _ in
+            completion(result as? String)
+        }
+    }
+
+    /// Find-in-page, implemented in app.js so every match can be highlighted
+    /// (WKWebView.find only selects one). `restart` re-runs the search from
+    /// the reader's position; otherwise this steps to the next/previous match.
+    /// Completes with the total match count and the active match's index.
+    func find(
+        _ query: String, backwards: Bool, restart: Bool,
+        completion: @escaping (_ count: Int, _ index: Int) -> Void
+    ) {
+        guard isReady, let json = Self.jsonString(query) else { return completion(0, -1) }
+        evaluateJavaScript("window.xem.find(\(json), \(backwards), \(restart));") { result, _ in
+            let status = result as? [String: Any]
+            completion(status?["count"] as? Int ?? 0, status?["index"] as? Int ?? -1)
+        }
+    }
+
+    func clearFind() {
+        guard isReady else { return }
+        evaluateJavaScript("window.xem.clearFind();", completionHandler: nil)
+    }
+
+    /// Push the user's stored find colors (Settings window) into the page.
+    private func applyFindColors() {
+        guard isReady, let json = Self.jsonString(FindColors.pagePayload()) else { return }
+        evaluateJavaScript("window.xem.setFindColors(\(json));", completionHandler: nil)
+    }
+
+    private static func jsonString(_ value: Any) -> String? {
+        // fragmentsAllowed so a bare String encodes too.
+        guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
     }
 
     func loadRenderer() {
@@ -102,6 +146,7 @@ extension MarkdownWebView: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         isReady = true
         applyTextScale()
+        applyFindColors()
         if let pending {
             self.pending = nil
             render(markdown: pending.text, baseDir: pending.baseDir)
