@@ -246,7 +246,7 @@
       var link = document.createElement('a');
       link.textContent = h.textContent;
       link.href = '#' + h.id;
-      link.style.paddingLeft = (0.8 + (level - minLevel) * 0.9) + 'rem';
+      link.style.paddingLeft = (0.9 + (level - minLevel) * 1.0) + 'em';
       link.addEventListener('click', function (e) {
         e.preventDefault();
         h.scrollIntoView({ block: 'start' });
@@ -419,6 +419,10 @@
       return findStatus();
     },
     scrollToId: scrollToId,
+    /// Interface (not document) text scale; see --ui-scale in theme.css.
+    setUIScale: function (scale) {
+      document.documentElement.style.setProperty('--ui-scale', String(scale));
+    },
     /// Show or hide the outline sidebar, keeping the reader's place (the
     /// content column reflows when it opens).
     setOutlineVisible: function (visible) {

@@ -13,6 +13,9 @@ final class FindBarViewController: NSTitlebarAccessoryViewController, NSSearchFi
 
     private let field = NSSearchField()
     private let status = NSTextField(labelWithString: "")
+    private let done = NSButton(title: "Done", target: nil, action: nil)
+    private var chevrons: [NSButton] = []
+    private var heightConstraint: NSLayoutConstraint?
 
     var query: String {
         get { field.stringValue }
@@ -28,15 +31,16 @@ final class FindBarViewController: NSTitlebarAccessoryViewController, NSSearchFi
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         status.textColor = .secondaryLabelColor
-        status.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
 
         let previous = Self.button(symbol: "chevron.up", tip: "Previous Match", action: #selector(previousTapped))
         let next = Self.button(symbol: "chevron.down", tip: "Next Match", action: #selector(nextTapped))
-        let done = NSButton(title: "Done", target: self, action: #selector(doneTapped))
+        done.target = self
+        done.action = #selector(doneTapped)
         done.bezelStyle = .rounded
         done.controlSize = .small
 
         for item in [previous, next] { item.target = self }
+        chevrons = [previous, next]
 
         let stack = NSStackView(views: [field, status, previous, next, done])
         stack.orientation = .horizontal
@@ -46,7 +50,10 @@ final class FindBarViewController: NSTitlebarAccessoryViewController, NSSearchFi
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 36))
         container.addSubview(stack)
+        let height = container.heightAnchor.constraint(equalToConstant: 36)
+        heightConstraint = height
         NSLayoutConstraint.activate([
+            height,
             stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             stack.topAnchor.constraint(equalTo: container.topAnchor),
@@ -54,6 +61,22 @@ final class FindBarViewController: NSTitlebarAccessoryViewController, NSSearchFi
             field.widthAnchor.constraint(greaterThanOrEqualToConstant: 160),
         ])
         view = container
+        applyFonts()
+        NotificationCenter.default.addObserver(
+            forName: UIFontSize.didChange, object: nil, queue: .main
+        ) { [weak self] _ in self?.applyFonts() }
+    }
+
+    /// Follow the interface text size; the strip grows with its text.
+    private func applyFonts() {
+        field.font = UIFontSize.font()
+        status.font = UIFontSize.font(NSFont.smallSystemFontSize)
+        done.font = UIFontSize.font(NSFont.smallSystemFontSize)
+        let config = NSImage.SymbolConfiguration(pointSize: UIFontSize.small, weight: .semibold)
+        for button in chevrons { button.symbolConfiguration = config }
+        let height = max(36, ceil(UIFontSize.regular * 1.7 + 12))
+        heightConstraint?.constant = height
+        view.setFrameSize(NSSize(width: view.frame.width, height: height))
     }
 
     private static func button(symbol: String, tip: String, action: Selector) -> NSButton {

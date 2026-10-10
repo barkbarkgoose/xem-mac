@@ -58,6 +58,42 @@ enum FindColors {
     }
 }
 
+/// Size of Xem's own interface text (find bar, search and switcher panels,
+/// shortcuts, settings, the outline sidebar). Separate from the in-document
+/// text zoom (Cmd +/-), which only scales the rendered markdown. The menu bar
+/// is drawn by macOS and does not follow this.
+enum UIFontSize {
+    static let didChange = Notification.Name("xem.uiFontSizeDidChange")
+    static let range: ClosedRange<Double> = 0.8...1.6
+    static let step = 0.1
+    private static let key = "uiFontScale"
+
+    static var scale: Double {
+        get {
+            let saved = UserDefaults.standard.double(forKey: key)
+            return saved == 0 ? 1.0 : min(max(saved, range.lowerBound), range.upperBound)
+        }
+        set {
+            let clamped = min(max(newValue, range.lowerBound), range.upperBound)
+            // Round away float drift from repeated 0.1 steps.
+            UserDefaults.standard.set((clamped * 100).rounded() / 100, forKey: key)
+            NotificationCenter.default.post(name: didChange, object: nil)
+        }
+    }
+
+    static func size(_ base: CGFloat) -> CGFloat { (base * CGFloat(scale)).rounded() }
+    static var regular: CGFloat { size(NSFont.systemFontSize) }
+    static var small: CGFloat { size(NSFont.smallSystemFontSize) }
+
+    static func font(_ base: CGFloat = NSFont.systemFontSize, weight: NSFont.Weight = .regular) -> NSFont {
+        .systemFont(ofSize: size(base), weight: weight)
+    }
+
+    static func monospaced(_ base: CGFloat = NSFont.systemFontSize) -> NSFont {
+        .monospacedSystemFont(ofSize: size(base), weight: .regular)
+    }
+}
+
 /// Whether new windows open with the outline sidebar showing. Each window
 /// toggles its own sidebar independently; this just remembers the last choice
 /// (across launches) so a new window starts the way you left the last one.

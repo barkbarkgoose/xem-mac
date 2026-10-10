@@ -44,6 +44,9 @@ final class MarkdownWebView: WKWebView {
         NotificationCenter.default.addObserver(
             forName: FindColors.didChange, object: nil, queue: .main
         ) { [weak self] _ in self?.applyFindColors() }
+        NotificationCenter.default.addObserver(
+            forName: UIFontSize.didChange, object: nil, queue: .main
+        ) { [weak self] _ in self?.applyUIScale() }
     }
 
     deinit {
@@ -152,6 +155,11 @@ final class MarkdownWebView: WKWebView {
         applyOutline()
     }
 
+    private func applyUIScale() {
+        guard isReady else { return }
+        evaluateJavaScript("window.xem.setUIScale(\(UIFontSize.scale));", completionHandler: nil)
+    }
+
     private func applyOutline() {
         guard isReady else { return }
         evaluateJavaScript(
@@ -258,6 +266,7 @@ extension MarkdownWebView: WKNavigationDelegate {
         isReady = true
         applyTextScale()
         applyFindColors()
+        applyUIScale()
         applyOutline()
         if let pending {
             self.pending = nil

@@ -34,6 +34,18 @@ final class TabSwitcherWindowController: NSWindowController,
         super.init(window: window)
         window.delegate = self
         window.contentView = buildContent()
+        applyFonts()
+        NotificationCenter.default.addObserver(
+            forName: UIFontSize.didChange, object: nil, queue: .main
+        ) { [weak self] _ in self?.applyFonts() }
+    }
+
+    /// Follow the interface text size.
+    private func applyFonts() {
+        field.font = UIFontSize.font()
+        for column in table.tableColumns { column.headerCell.font = UIFontSize.font() }
+        table.rowHeight = ceil(UIFontSize.regular * 1.6)
+        table.reloadData()
     }
 
     @available(*, unavailable)
@@ -186,11 +198,11 @@ final class TabSwitcherWindowController: NSWindowController,
         }()
         if id.rawValue == "name" {
             cell.stringValue = entry.url.lastPathComponent
-            cell.font = entry.isCurrent ? .boldSystemFont(ofSize: NSFont.systemFontSize) : .systemFont(ofSize: NSFont.systemFontSize)
+            cell.font = UIFontSize.font(weight: entry.isCurrent ? .bold : .regular)
             cell.textColor = .labelColor
         } else {
             cell.stringValue = (entry.url.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath
-            cell.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+            cell.font = UIFontSize.font(NSFont.smallSystemFontSize)
             cell.textColor = .secondaryLabelColor
         }
         return cell

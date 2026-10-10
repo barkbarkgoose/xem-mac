@@ -39,6 +39,19 @@ final class GlobalSearchWindowController: NSWindowController,
         window.minSize = NSSize(width: 420, height: 240)
         super.init(window: window)
         window.contentView = buildContent()
+        applyFonts()
+        NotificationCenter.default.addObserver(
+            forName: UIFontSize.didChange, object: nil, queue: .main
+        ) { [weak self] _ in self?.applyFonts() }
+    }
+
+    /// Follow the interface text size.
+    private func applyFonts() {
+        field.font = UIFontSize.font()
+        summary.font = UIFontSize.font(NSFont.smallSystemFontSize)
+        for column in table.tableColumns { column.headerCell.font = UIFontSize.font() }
+        table.rowHeight = ceil(UIFontSize.regular * 1.6)
+        table.reloadData()
     }
 
     @available(*, unavailable)
@@ -87,7 +100,6 @@ final class GlobalSearchWindowController: NSWindowController,
         scroll.borderType = .noBorder
 
         summary.textColor = .secondaryLabelColor
-        summary.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
 
         let container = NSView()
         for view in [field, scroll, summary] {
@@ -208,6 +220,7 @@ final class GlobalSearchWindowController: NSWindowController,
             field.lineBreakMode = .byTruncatingTail
             return field
         }()
+        cell.font = UIFontSize.font()
         switch id.rawValue {
         case "doc":
             cell.stringValue = hit.url.lastPathComponent
