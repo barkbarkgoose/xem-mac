@@ -38,6 +38,11 @@ XEM_SNAPSHOT_LIGHT=1 ./build/Xem.app/Contents/MacOS/xem --snapshot some.md /tmp/
 - `Sources/xem/` is the native shell: `AppDelegate` (opening files, dedupes so reopening a file focuses its window), `DocumentWindowController` (one window per document), `MarkdownWebView` (`WKWebView` host and JS bridge), `FileWatcher` (live reload). `main.swift` is a plain top-level script, not `@main`, because the two can't coexist in a SwiftPM executable.
 - `Resources/web/` is the renderer, loaded from the app bundle: `app.js` (markdown-it pipeline, Mermaid, KaTeX, highlight.js, scroll restore), `theme.css` (palette, follows system light/dark), and `vendor/` (all third-party JS/CSS/fonts, committed; the app must stay fully offline, nothing fetched at runtime; see `THIRD-PARTY.md`).
 - Text zoom (View menu, ⌘+ / ⌘- / ⌘0) is text-only: `MarkdownWebView` stores the scale in `UserDefaults` and calls `window.xem.setTextScale`, which sets `--text-scale` on `<html>`. `theme.css` sizes everything in rem/em, so keep new CSS in those units or it won't zoom.
+- Native <-> page bridge: the page posts `{type:'openLink', path, fragment}` to the `xem` script message handler (`MarkdownWebView`, via a weak `ScriptBridge`). `app.js` intercepts relative-link clicks itself because the page lives in the bundle, so a relative `href` would otherwise resolve against it. Markdown targets open as tabs; non-viewable files are only revealed in Finder, never launched.
+- Find is implemented in `app.js` (`window.xem.find`), not with `WKWebView.find`/`NSTextFinder`: WKWebView on macOS has no find UI and only selects one match. Matches are `<mark class="xem-find">`; colors are `--find-bg`/`--find-active-bg`, overridable per appearance from the Settings window (`Settings.swift`). `FindBarViewController` is a titlebar accessory.
+- Every markdown-it block carries `data-line="start:end"` (source lines). All-tabs search (`GlobalSearchWindowController`, Cmd-Shift-F) searches each document's source natively, then `window.xem.findAtSourceLine` maps a source line to the rendered match using those attributes.
+- The outline sidebar is HTML inside the page (`#outline`, toggled by `body.outline-open`), not a native split view, so the web view stays the window's content view and the sidebar zooms with text.
+- Printing/PDF use `WKWebView.printOperation` with `@media print` in `theme.css` (always light; `hljs-dark.css` is `screen`-only). The print view needs an explicit frame or output is blank.
 - `scripts/xem` is the CLI launcher: resolves `Xem.app` (`$XEM_APP`, next to the script/Cellar, then `/Applications`), writes stdin to a temp file if piped, and calls `open -a`.
 - `Formula/xem.rb` is the Homebrew formula; it is mirrored by hand into a separate `homebrew-tap` repo. The repo is private, so the formula's `head` uses SSH and `brew install --HEAD` is required until the repo is public and the stable `sha256` is filled in. `making-brew-work.md` (untracked) is a scratch troubleshooting log.
 
@@ -46,6 +51,9 @@ XEM_SNAPSHOT_LIGHT=1 ./build/Xem.app/Contents/MacOS/xem --snapshot some.md /tmp/
 - **Atomic saves:** editors `rename()` a temp file over the target, leaving a plain `.write` watcher on a dead inode. `FileWatcher` watches `.delete`/`.rename`, re-opens and re-arms, and also watches the parent directory as a backstop.
 - **Relative images:** the page is loaded from the bundle, so `app.js` rewrites image `src` against the document's directory, and the web view is granted file read access at `/`.
 - **Titlebar:** the window must not use `.fullSizeContentView`; the `WKWebView` would cover the titlebar and swallow drag events.
+- **Cmd-F belongs to Find:** Full Screen is Ctrl-Cmd-F. Two items sharing Cmd-F made Find appear to do nothing.
+- **Cmd-Shift-\ is Xem's own tab switcher** (`TabSwitcherWindowController`), not AppKit's tab overview, which can't be filtered or driven with arrow keys. The key monitor in `AppDelegate` owns that key and Ctrl-Tab (which steps the switcher's selection while it is open).
+- **Settings/search windows set `tabbingMode = .disallowed`;** otherwise document windows (`.preferred`) open as tabs of them.
 
 ## Releasing
 

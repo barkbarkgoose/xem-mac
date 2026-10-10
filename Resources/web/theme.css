@@ -151,3 +151,96 @@ pre.mermaid {
 
 .katex { font-size: 1.05em; }
 .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.4em 0; }
+
+/* ---- Outline sidebar (app.js toggles body.outline-open) ---- */
+#outline {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 16rem;
+  overflow-y: auto;
+  padding: 1rem 0 2rem;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  z-index: 5;
+}
+body.outline-open #outline { display: block; }
+body.outline-open { padding-left: 16rem; }
+#outline ul { list-style: none; margin: 0; padding: 0; }
+#outline li { margin: 0; }
+#outline a {
+  display: block;
+  padding-top: 0.28rem;
+  padding-bottom: 0.28rem;
+  padding-right: 0.8rem;
+  color: var(--fg);
+  border-left: 2px solid transparent;
+  overflow-wrap: anywhere;
+}
+#outline a:hover { background: var(--border); text-decoration: none; }
+#outline a.active {
+  color: var(--heading);
+  border-left-color: var(--heading);
+  font-weight: 600;
+}
+.outline-empty { margin: 0; padding: 0.3rem 0.8rem; color: var(--muted); }
+
+/* Always-visible toggle, pinned top-left; sits on the sidebar when it is open. */
+#outline-toggle {
+  position: fixed;
+  top: 0.6rem;
+  left: 0.6rem;
+  z-index: 6;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+#outline-toggle:hover { opacity: 1; color: var(--fg-strong); }
+#outline-toggle[aria-pressed="true"] { color: var(--heading); }
+#outline-toggle svg { width: 1.1rem; height: 1.1rem; }
+/* Keep the first entries clear of the button. */
+#outline { padding-top: 3.2rem; }
+
+/* Too narrow to sit beside the text: float over it instead of squeezing it. */
+@media (max-width: 640px) {
+  body.outline-open { padding-left: 0; }
+  #outline { box-shadow: 0 0 1.5rem rgba(0, 0, 0, 0.25); }
+}
+
+/* ---- Print / PDF export: always the light palette, no chrome ---- */
+@media print {
+  :root {
+    --bg: #FFFFFF;
+    --fg: #1F2328;
+    --fg-strong: #000000;
+    --muted: #57606A;
+    --border: #D0D7DE;
+    --surface: #F6F8FA;
+    --accent: #0A69DA;
+    --heading: #B34700;
+    --quote: #7BB87D;
+    --code-fg: #1F2328;
+  }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body, body.outline-open { background: #FFFFFF; padding-left: 0; }
+  #outline, body.outline-open #outline, #outline-toggle { display: none; }
+  #content { max-width: none; margin: 0; padding: 0; }
+  pre, blockquote, table, img, .katex-display, tr { break-inside: avoid; }
+  pre { white-space: pre-wrap; overflow: visible; }
+  table { display: table; }
+  h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+  mark.xem-find, mark.xem-find-active { background: none; outline: 0; }
+}

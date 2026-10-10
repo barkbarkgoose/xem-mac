@@ -58,6 +58,18 @@ enum FindColors {
     }
 }
 
+/// Whether new windows open with the outline sidebar showing. Each window
+/// toggles its own sidebar independently; this just remembers the last choice
+/// (across launches) so a new window starts the way you left the last one.
+enum OutlinePreference {
+    private static let key = "outlineVisible"
+
+    static var isVisible: Bool {
+        get { UserDefaults.standard.bool(forKey: key) }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
+    }
+}
+
 extension NSColor {
     convenience init?(hex: String) {
         var s = hex.trimmingCharacters(in: .whitespaces)

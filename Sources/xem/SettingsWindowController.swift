@@ -9,7 +9,7 @@ final class SettingsWindowController: NSWindowController {
     private var wells: [NSColorWell] = []
 
     init() {
-        let window = NSWindow(
+        let window = PopupWindow(
             contentRect: NSRect(x: 0, y: 0, width: 420, height: 190),
             styleMask: [.titled, .closable],
             backing: .buffered,
@@ -22,13 +22,13 @@ final class SettingsWindowController: NSWindowController {
         window.tabbingMode = .disallowed
         super.init(window: window)
         window.contentView = buildContent()
-        window.center()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not supported") }
 
     func showAndFocus() {
+        window?.center(over: NSApp.keyWindow)
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

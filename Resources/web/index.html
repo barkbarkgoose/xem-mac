@@ -9,11 +9,19 @@
                font-src 'self';
                img-src 'self' file: data:;">
 <link rel="stylesheet" href="vendor/katex.min.css">
-<link rel="stylesheet" href="vendor/hljs-light.css" media="(prefers-color-scheme: light)">
-<link rel="stylesheet" href="vendor/hljs-dark.css" media="(prefers-color-scheme: dark)">
+<!-- Printing is always light, whatever the system appearance. -->
+<link rel="stylesheet" href="vendor/hljs-light.css" media="print, (prefers-color-scheme: light)">
+<link rel="stylesheet" href="vendor/hljs-dark.css" media="screen and (prefers-color-scheme: dark)">
 <link rel="stylesheet" href="theme.css">
 </head>
 <body>
+<button id="outline-toggle" type="button" title="Show/Hide Outline (&#8679;&#8984;O)" aria-label="Toggle outline" aria-pressed="false">
+  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+    <rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="6" y1="2.5" x2="6" y2="13.5" stroke="currentColor" stroke-width="1.4"/>
+  </svg>
+</button>
+<nav id="outline" aria-label="Outline"></nav>
 <main id="content"></main>
 
 <script src="vendor/markdown-it.min.js"></script>

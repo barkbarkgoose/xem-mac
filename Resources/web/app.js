@@ -39,6 +39,21 @@
       .replace(/\s+/g, '-');
   }
 
+  // Tag every block with its source line range ("start:end", 0-based, end
+  // exclusive). Global search uses it to land on the right rendered match.
+  md.core.ruler.push('source_lines', function (state) {
+    state.tokens.forEach(function (token) {
+      if (token.map && token.block && token.nesting !== -1 && token.type !== 'inline') {
+        token.attrSet('data-line', token.map[0] + ':' + token.map[1]);
+      }
+    });
+  });
+
+  function tagPre(html, token) {
+    if (!token.map || html.indexOf('<pre') !== 0) return html;
+    return '<pre data-line="' + token.map[0] + ':' + token.map[1] + '"' + html.slice(4);
+  }
+
   // Mermaid fences must become <pre class="mermaid"> holding the RAW source, so
   // override the fence renderer ahead of markdown-it's default.
   var defaultFence = md.renderer.rules.fence;
@@ -46,9 +61,14 @@
     var token = tokens[idx];
     var info = (token.info || '').trim().split(/\s+/)[0];
     if (info === 'mermaid') {
-      return '<pre class="mermaid">' + escapeHtml(token.content) + '</pre>';
+      return tagPre('<pre class="mermaid">' + escapeHtml(token.content) + '</pre>', token);
     }
-    return defaultFence(tokens, idx, options, env, self);
+    return tagPre(defaultFence(tokens, idx, options, env, self), token);
+  };
+
+  var defaultCodeBlock = md.renderer.rules.code_block;
+  md.renderer.rules.code_block = function (tokens, idx, options, env, self) {
+    return tagPre(defaultCodeBlock(tokens, idx, options, env, self), tokens[idx]);
   };
 
   function escapeHtml(s) {
@@ -201,6 +221,127 @@
     });
   }
 
+  // ---- Outline sidebar ---------------------------------------------------
+  var outlineEl = document.getElementById('outline');
+  var outlineItems = [];
+  var outlineActive = -1;
+
+  function buildOutline() {
+    outlineEl.textContent = '';
+    outlineItems = [];
+    outlineActive = -1;
+    var headings = content.querySelectorAll('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]');
+    if (!headings.length) {
+      var empty = document.createElement('p');
+      empty.className = 'outline-empty';
+      empty.textContent = 'No headings';
+      outlineEl.appendChild(empty);
+      return;
+    }
+    var minLevel = 6;
+    headings.forEach(function (h) { minLevel = Math.min(minLevel, Number(h.tagName.charAt(1))); });
+    var list = document.createElement('ul');
+    headings.forEach(function (h) {
+      var level = Number(h.tagName.charAt(1));
+      var link = document.createElement('a');
+      link.textContent = h.textContent;
+      link.href = '#' + h.id;
+      link.style.paddingLeft = (0.8 + (level - minLevel) * 0.9) + 'rem';
+      link.addEventListener('click', function (e) {
+        e.preventDefault();
+        h.scrollIntoView({ block: 'start' });
+      });
+      var item = document.createElement('li');
+      item.appendChild(link);
+      list.appendChild(item);
+      outlineItems.push({ heading: h, link: link });
+    });
+    outlineEl.appendChild(list);
+  }
+
+  /// Highlight the section the reader is in: the last heading at or above the
+  /// top of the viewport.
+  function updateOutlineActive() {
+    if (!outlineItems.length || !document.body.classList.contains('outline-open')) return;
+    var active = 0;
+    for (var i = 0; i < outlineItems.length; i++) {
+      if (outlineItems[i].heading.getBoundingClientRect().top <= 24) active = i; else break;
+    }
+    if (active === outlineActive) return;
+    if (outlineItems[outlineActive]) outlineItems[outlineActive].link.classList.remove('active');
+    outlineActive = active;
+    var link = outlineItems[active].link;
+    link.classList.add('active');
+    link.scrollIntoView({ block: 'nearest' });
+  }
+
+  // The button asks native to flip the shared preference, so every window
+  // follows; setOutlineVisible below then reflects it back.
+  var outlineToggle = document.getElementById('outline-toggle');
+  outlineToggle.addEventListener('click', function () { post({ type: 'toggleOutline' }); });
+
+  var scrollQueued = false;
+  window.addEventListener('scroll', function () {
+    if (scrollQueued) return;
+    scrollQueued = true;
+    window.requestAnimationFrame(function () {
+      scrollQueued = false;
+      updateOutlineActive();
+    });
+  });
+
+  // ---- Links and fragments -----------------------------------------------
+  function scrollToId(id) {
+    if (!id) return false;
+    var el = document.getElementById(id);
+    if (!el) return false;
+    el.scrollIntoView({ block: 'start' });
+    return true;
+  }
+
+  function post(message) {
+    try { window.webkit.messageHandlers.xem.postMessage(message); }
+    catch (e) { console.error('xem bridge:', e); }
+  }
+
+  // The page lives in the app bundle, so a relative href would resolve against
+  // the bundle. Intercept clicks and resolve against the document instead.
+  content.addEventListener('click', function (e) {
+    if (e.defaultPrevented) return;
+    var a = e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a || !content.contains(a)) return;
+    var href = a.getAttribute('href');
+    if (href.charAt(0) === '#') {
+      e.preventDefault();
+      var id = href.slice(1);
+      try { id = decodeURIComponent(id); } catch (err) { /* keep raw */ }
+      scrollToId(id);
+      return;
+    }
+    // Real schemes (http, mailto, ...) go to the native navigation delegate.
+    if (/^[a-z][a-z0-9+.-]*:/i.test(href) && !/^file:/i.test(href)) return;
+    e.preventDefault();
+    var baseDir = (lastPayload && lastPayload.baseDir) || '/';
+    var base = 'file://' + encodeURI(baseDir).replace(/#/g, '%23') + '/';
+    try {
+      var url = new URL(href, base);
+      post({
+        type: 'openLink',
+        path: decodeURIComponent(url.pathname),
+        fragment: decodeURIComponent(url.hash.replace(/^#/, ''))
+      });
+    } catch (err) {
+      console.error('xem link:', err);
+    }
+  });
+
+  /// Runs once a render has fully settled (including diagrams).
+  function afterRender(payloadFragment) {
+    reapplyFind();
+    updateOutlineActive();
+    if (payloadFragment) scrollToId(payloadFragment);
+  }
+
   /// A save re-renders the page; keep the active search alive across it.
   function reapplyFind() {
     if (!findQuery) return;
@@ -242,6 +383,51 @@
       findQuery = '';
       return findStatus();
     },
+    /// Select the rendered match for source line `line` (0-based). Highlights
+    /// every match, then picks the one inside the block covering that line.
+    findAtSourceLine: function (query, line) {
+      var status = window.xem.find(query, false, true);
+      if (!findMarks.length) return status;
+      var re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      var inside = [];       // marks whose block covers the line
+      var nearest = null;    // else: last block starting at or before it
+      findMarks.forEach(function (mark, i) {
+        var block = mark.closest('[data-line]');
+        if (!block) return;
+        var range = block.getAttribute('data-line').split(':');
+        var start = Number(range[0]), end = Number(range[1]);
+        var entry = { index: i, start: start };
+        if (start <= line && line < end) inside.push(entry);
+        else if (start <= line && (!nearest || start >= nearest.start)) nearest = entry;
+      });
+      var group = inside;
+      if (group.length) {
+        var innermost = Math.max.apply(null, group.map(function (m) { return m.start; }));
+        group = group.filter(function (m) { return m.start === innermost; });
+      } else if (nearest) {
+        group = [nearest];
+      }
+      if (group.length) {
+        // Earlier source matches in the same block precede this one.
+        var lines = ((lastPayload && lastPayload.markdown) || '').split('\n');
+        var skipped = 0;
+        for (var i = group[0].start; i < line && i < lines.length; i++) {
+          skipped += (lines[i].match(re) || []).length;
+        }
+        setActiveMatch(group[Math.min(skipped, group.length - 1)].index, true);
+      }
+      return findStatus();
+    },
+    scrollToId: scrollToId,
+    /// Show or hide the outline sidebar, keeping the reader's place (the
+    /// content column reflows when it opens).
+    setOutlineVisible: function (visible) {
+      var anchor = captureAnchor();
+      document.body.classList.toggle('outline-open', !!visible);
+      outlineToggle.setAttribute('aria-pressed', visible ? 'true' : 'false');
+      restoreAnchor(anchor);
+      updateOutlineActive();
+    },
     /// Per-appearance overrides for --find-bg / --find-active-bg, as
     /// {light: {match, active}, dark: {match, active}}. Missing entries fall
     /// back to the theme.css defaults.
@@ -254,10 +440,14 @@
       var anchor = captureAnchor();
       var token = ++renderToken;
 
+      // One-shot: a link to other.md#section scrolls once, not on every save.
+      var fragment = payload.fragment || '';
+      payload.fragment = '';
       // The old marks die with the old DOM; reapplyFind rebuilds them below.
       findMarks = [];
       findIndex = -1;
       content.innerHTML = md.render(payload.markdown || '');
+      buildOutline();
       rewriteRelativePaths(content, payload.baseDir);
 
       try {
@@ -281,11 +471,11 @@
           .catch(function (e) { console.error('mermaid:', e); })
           .finally(function () {
             // A later render may have landed while mermaid was working.
-            if (token === renderToken) { restoreAnchor(anchor); reapplyFind(); }
+            if (token === renderToken) { restoreAnchor(anchor); afterRender(fragment); }
           });
       } else {
         restoreAnchor(anchor);
-        reapplyFind();
+        afterRender(fragment);
       }
     }
   };

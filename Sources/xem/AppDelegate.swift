@@ -1,6 +1,7 @@
 import AppKit
+import UniformTypeIdentifiers
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Keyed by resolved path so reopening a file focuses its window instead of
     /// stacking duplicates.
     private var controllers: [String: DocumentWindowController] = [:]
@@ -18,21 +19,124 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 
-    func openDocument(_ url: URL) {
-        let key = url.resolvingSymlinksInPath().standardizedFileURL.path
+    private func key(for url: URL) -> String {
+        url.resolvingSymlinksInPath().standardizedFileURL.path
+    }
+
+    func openDocument(_ url: URL, fragment: String? = nil) {
+        let key = key(for: url)
         if let existing = controllers[key] {
             NSLog("xem: focus existing window for %@", key)
             existing.showAndFocus()
+            if let fragment { existing.scroll(toFragment: fragment) }
             return
         }
         NSLog("xem: open new window for %@ (%d already open)", key, controllers.count)
-        let controller = DocumentWindowController(url: url) { [weak self] closed in
-            let closedKey = closed.url.resolvingSymlinksInPath().standardizedFileURL.path
-            self?.controllers.removeValue(forKey: closedKey)
-        }
+        let controller = DocumentWindowController(
+            url: url,
+            fragment: fragment,
+            open: { [weak self] url, fragment in self?.openLink(url, fragment: fragment) },
+            onClose: { [weak self] closed in
+                guard let self else { return }
+                self.controllers.removeValue(forKey: self.key(for: closed.url))
+            }
+        )
         controllers[key] = controller
         controller.showAndFocus()
         NSDocumentController.shared.noteNewRecentDocumentURL(url)
+    }
+
+    /// A link clicked in a document, or a file dropped on one. Markdown opens
+    /// as another tab; viewable files open in their app; anything else is only
+    /// revealed in Finder, so a link can never launch an executable.
+    private func openLink(_ url: URL, fragment: String?) {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            NSLog("xem: link target missing: %@", url.path)
+            NSSound.beep()
+            return
+        }
+        if isDirectory.boolValue {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } else if url.isDocumentLike {
+            openDocument(url, fragment: fragment)
+        } else if let type = UTType(filenameExtension: url.pathExtension),
+                  [UTType.image, .pdf, .audiovisualContent].contains(where: { type.conforms(to: $0) }) {
+            NSWorkspace.shared.open(url)
+        } else {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
+    }
+
+    // MARK: Open Recent
+
+    private let recentMenu = NSMenu(title: "Open Recent")
+
+    /// Rebuilt on demand rather than via AppKit's automatic recent-documents
+    /// menu, which routes through NSDocumentController and would try to
+    /// instantiate an NSDocument.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === recentMenu else { return }
+        menu.removeAllItems()
+        let urls = NSDocumentController.shared.recentDocumentURLs
+        for url in urls {
+            let item = NSMenuItem(title: url.lastPathComponent, action: #selector(openRecent(_:)), keyEquivalent: "")
+            item.representedObject = url
+            item.toolTip = url.path
+            menu.addItem(item)
+        }
+        if !urls.isEmpty { menu.addItem(.separator()) }
+        let clear = NSMenuItem(title: "Clear Menu", action: #selector(clearRecent(_:)), keyEquivalent: "")
+        clear.isEnabled = !urls.isEmpty
+        menu.addItem(clear)
+    }
+
+    @objc private func openRecent(_ sender: NSMenuItem) {
+        if let url = sender.representedObject as? URL { openDocument(url) }
+    }
+
+    @objc private func clearRecent(_ sender: Any?) {
+        NSDocumentController.shared.clearRecentDocuments(nil)
+    }
+
+    // MARK: Search all tabs
+
+    private lazy var searchController: GlobalSearchWindowController = {
+        let controller = GlobalSearchWindowController()
+        controller.documents = { [weak self] in
+            guard let self else { return [] }
+            return self.controllers.values
+                .sorted { $0.url.lastPathComponent.localizedStandardCompare($1.url.lastPathComponent) == .orderedAscending }
+                .map { ($0.url, $0.sourceText) }
+        }
+        controller.onSelect = { [weak self] url, query, line in
+            guard let self, let target = self.controllers[self.key(for: url)] else { return }
+            target.showSearchResult(query: query, line: line)
+        }
+        return controller
+    }()
+
+    @objc private func showGlobalSearch(_ sender: Any?) {
+        searchController.showAndFocus()
+    }
+
+    // MARK: Help
+
+    private lazy var shortcutsController = ShortcutsWindowController()
+
+    @objc private func showShortcuts(_ sender: Any?) {
+        shortcutsController.showAndFocus()
+    }
+
+    @objc private func showAbout(_ sender: Any?) {
+        let credits = NSAttributedString(
+            string: "A small markdown viewer that live-reloads on save.\n\n"
+                + "Keyboard shortcuts: Help \u{2192} Keyboard Shortcuts (\u{2318}/).",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                .foregroundColor: NSColor.secondaryLabelColor,
+            ])
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
     private var settingsController: SettingsWindowController?
@@ -50,20 +154,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if panel.runModal() == .OK, let url = panel.url { openDocument(url) }
     }
 
-    /// Tab switching keys. A local monitor runs before the web view sees the
-    /// event, so WebKit cannot claim Cmd-Shift-Arrow for text selection, and
-    /// Ctrl-Tab works regardless of which view has focus.
+    /// Tab keys. A local monitor runs before the web view sees the event, so
+    /// WebKit cannot claim Cmd-Shift-Arrow for text selection, and Ctrl-Tab
+    /// works regardless of which view has focus. It also owns Cmd-Shift-\
+    /// (AppKit's own tab overview is replaced by the filterable switcher).
     private func installTabKeyMonitor() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
             let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             let window = NSApp.keyWindow
+            let switcherIsKey = window != nil && window === self.tabSwitcher.window
             switch (event.keyCode, mods) {
+            case (42, [.command, .shift]):   // backslash
+                self.showTabSwitcher(nil)
             case (124, [.command, .shift]),  // right arrow
                  (48, [.control]):           // tab
-                window?.selectNextTab(nil)
+                if switcherIsKey { self.tabSwitcher.moveSelection(by: 1) } else { window?.selectNextTab(nil) }
             case (123, [.command, .shift]),  // left arrow
                  (48, [.control, .shift]):
-                window?.selectPreviousTab(nil)
+                if switcherIsKey { self.tabSwitcher.moveSelection(by: -1) } else { window?.selectPreviousTab(nil) }
             default:
                 return event
             }
@@ -71,12 +180,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: Tab switcher
+
+    private lazy var tabSwitcher: TabSwitcherWindowController = {
+        let controller = TabSwitcherWindowController()
+        controller.entries = { [weak self] in self?.tabSwitcherEntries() ?? [] }
+        controller.onSelect = { [weak self] url in
+            self?.controllers[self?.key(for: url) ?? ""]?.showAndFocus()
+        }
+        return controller
+    }()
+
+    /// Documents in tab order, grouped by window.
+    private func tabSwitcherEntries() -> [TabSwitcherWindowController.Entry] {
+        let current = (NSApp.keyWindow?.windowController as? DocumentWindowController)?.url
+        var seen = Set<ObjectIdentifier>()
+        var entries: [TabSwitcherWindowController.Entry] = []
+        for window in NSApp.windows {
+            for tab in window.tabGroup?.windows ?? [window] where seen.insert(ObjectIdentifier(tab)).inserted {
+                guard let document = tab.windowController as? DocumentWindowController else { continue }
+                entries.append(.init(url: document.url, isCurrent: document.url == current))
+            }
+        }
+        return entries
+    }
+
+    @objc private func showTabSwitcher(_ sender: Any?) {
+        tabSwitcher.showAndFocus()
+    }
+
     private func buildMenu() {
         let main = NSMenu()
 
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About Xem", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "About Xem", action: #selector(showAbout(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Settings…", action: #selector(showSettings(_:)), keyEquivalent: ",")
         appMenu.addItem(.separator())
@@ -88,7 +226,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let fileItem = NSMenuItem()
         let fileMenu = NSMenu(title: "File")
         fileMenu.addItem(withTitle: "Open…", action: #selector(openFile(_:)), keyEquivalent: "o")
+        let recentItem = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: "")
+        recentMenu.delegate = self
+        recentItem.submenu = recentMenu
+        fileMenu.addItem(recentItem)
+        fileMenu.addItem(.separator())
         fileMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        fileMenu.addItem(.separator())
+        let reveal = fileMenu.addItem(withTitle: "Reveal in Finder", action: #selector(DocumentWindowController.revealInFinder(_:)), keyEquivalent: "r")
+        reveal.keyEquivalentModifierMask = [.command, .shift]
+        let copyPath = fileMenu.addItem(withTitle: "Copy Path", action: #selector(DocumentWindowController.copyPath(_:)), keyEquivalent: "c")
+        copyPath.keyEquivalentModifierMask = [.command, .option]
+        fileMenu.addItem(.separator())
+        fileMenu.addItem(withTitle: "Export as PDF…", action: #selector(DocumentWindowController.exportPDF(_:)), keyEquivalent: "")
+        fileMenu.addItem(withTitle: "Print…", action: #selector(DocumentWindowController.printDocument(_:)), keyEquivalent: "p")
         fileItem.submenu = fileMenu
         main.addItem(fileItem)
 
@@ -103,6 +254,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "Find Next", action: #selector(DocumentWindowController.findNext(_:)), keyEquivalent: "g")
         let prevFind = editMenu.addItem(withTitle: "Find Previous", action: #selector(DocumentWindowController.findPrevious(_:)), keyEquivalent: "G")
         prevFind.keyEquivalentModifierMask = [.command, .shift]
+        let findAll = editMenu.addItem(withTitle: "Find in All Tabs…", action: #selector(showGlobalSearch(_:)), keyEquivalent: "F")
+        findAll.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(withTitle: "Use Selection for Find", action: #selector(DocumentWindowController.useSelectionForFind(_:)), keyEquivalent: "e")
         editItem.submenu = editMenu
         main.addItem(editItem)
@@ -113,7 +266,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         viewMenu.addItem(withTitle: "Zoom In", action: #selector(MarkdownWebView.textZoomIn(_:)), keyEquivalent: "+")
         viewMenu.addItem(withTitle: "Zoom Out", action: #selector(MarkdownWebView.textZoomOut(_:)), keyEquivalent: "-")
         viewMenu.addItem(.separator())
-        viewMenu.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
+        let outline = viewMenu.addItem(withTitle: "Show Outline", action: #selector(DocumentWindowController.toggleOutline(_:)), keyEquivalent: "o")
+        outline.keyEquivalentModifierMask = [.command, .shift]
+        viewMenu.addItem(.separator())
+        // Ctrl-Cmd-F, the macOS standard; plain Cmd-F belongs to Find.
+        let fullScreen = viewMenu.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
+        fullScreen.keyEquivalentModifierMask = [.command, .control]
         viewItem.submenu = viewMenu
         main.addItem(viewItem)
 
@@ -131,6 +289,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         next.keyEquivalentModifierMask = [.command, .shift]
         let prev = windowMenu.addItem(withTitle: "Show Previous Tab", action: #selector(NSWindow.selectPreviousTab(_:)), keyEquivalent: arrow(NSLeftArrowFunctionKey))
         prev.keyEquivalentModifierMask = [.command, .shift]
+        let allTabs = windowMenu.addItem(withTitle: "Show All Tabs…", action: #selector(showTabSwitcher(_:)), keyEquivalent: "\\")
+        allTabs.keyEquivalentModifierMask = [.command, .shift]
         windowMenu.addItem(withTitle: "Show/Hide Tab Bar", action: #selector(NSWindow.toggleTabBar(_:)), keyEquivalent: "")
         windowMenu.addItem(withTitle: "Move Tab to New Window", action: #selector(NSWindow.moveTabToNewWindow(_:)), keyEquivalent: "")
         windowMenu.addItem(withTitle: "Merge All Windows", action: #selector(NSWindow.mergeAllWindows(_:)), keyEquivalent: "")
@@ -139,6 +299,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowItem.submenu = windowMenu
         main.addItem(windowItem)
         NSApp.windowsMenu = windowMenu
+
+        let helpItem = NSMenuItem()
+        let helpMenu = NSMenu(title: "Help")
+        helpMenu.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showShortcuts(_:)), keyEquivalent: "/")
+        helpItem.submenu = helpMenu
+        main.addItem(helpItem)
+        NSApp.helpMenu = helpMenu
 
         NSApp.mainMenu = main
     }

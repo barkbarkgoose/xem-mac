@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 import WebKit
 
 /// A WKWebView preloaded with the bundled renderer. Markdown is pushed in as a
@@ -6,7 +7,13 @@ import WebKit
 /// backtick or quote in the document would break the call.
 final class MarkdownWebView: WKWebView {
     private var isReady = false
-    private var pending: (text: String, baseDir: String)?
+    private var pending: (text: String, baseDir: String, fragment: String?)?
+    private let bridge = ScriptBridge()
+
+    /// A relative link in the document was clicked (app.js resolved it).
+    var onOpenLink: ((_ url: URL, _ fragment: String?) -> Void)?
+    /// Files were dropped on the page.
+    var onDropFiles: (([URL]) -> Void)?
 
     private static let scaleKey = "textScale"
     private static let scaleRange = 0.5...3.0
@@ -28,13 +35,20 @@ final class MarkdownWebView: WKWebView {
     init() {
         let config = WKWebViewConfiguration()
         config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
+        config.userContentController.add(bridge, name: "xem")
         super.init(frame: .zero, configuration: config)
+        bridge.owner = self
         setValue(false, forKey: "drawsBackground")
         if #available(macOS 13.3, *) { isInspectable = true }
         navigationDelegate = self
         NotificationCenter.default.addObserver(
             forName: FindColors.didChange, object: nil, queue: .main
         ) { [weak self] _ in self?.applyFindColors() }
+    }
+
+    deinit {
+        // The content controller retains its handlers.
+        configuration.userContentController.removeScriptMessageHandler(forName: "xem")
     }
 
     @available(*, unavailable)
@@ -111,6 +125,103 @@ final class MarkdownWebView: WKWebView {
         return String(data: data, encoding: .utf8)
     }
 
+    /// Select the rendered match for a hit at `line` (0-based) in the source.
+    func findAtSourceLine(
+        _ query: String, line: Int,
+        completion: @escaping (_ count: Int, _ index: Int) -> Void
+    ) {
+        guard isReady, let json = Self.jsonString(query) else { return completion(0, -1) }
+        evaluateJavaScript("window.xem.findAtSourceLine(\(json), \(line));") { result, _ in
+            let status = result as? [String: Any]
+            completion(status?["count"] as? Int ?? 0, status?["index"] as? Int ?? -1)
+        }
+    }
+
+    func scroll(toFragment id: String) {
+        guard isReady, let json = Self.jsonString(id) else { return }
+        evaluateJavaScript("window.xem.scrollToId(\(json));", completionHandler: nil)
+    }
+
+    /// This window's own outline state; it starts from the remembered default.
+    private(set) var isOutlineVisible = OutlinePreference.isVisible
+
+    func toggleOutline() {
+        isOutlineVisible.toggle()
+        // The default for windows opened later follows the latest choice.
+        OutlinePreference.isVisible = isOutlineVisible
+        applyOutline()
+    }
+
+    private func applyOutline() {
+        guard isReady else { return }
+        evaluateJavaScript(
+            "window.xem.setOutlineVisible(\(isOutlineVisible));", completionHandler: nil)
+    }
+
+    fileprivate func handleScriptMessage(_ body: Any) {
+        guard let message = body as? [String: Any] else { return }
+        if message["type"] as? String == "toggleOutline" {
+            toggleOutline()
+            return
+        }
+        guard message["type"] as? String == "openLink",
+              let path = message["path"] as? String
+        else { return }
+        let fragment = (message["fragment"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        onOpenLink?(URL(fileURLWithPath: path), fragment)
+    }
+
+    // MARK: Context menu
+
+    /// WebKit's default menu offers Reload / Back / Forward, which would blank
+    /// the renderer (the page is the app's own index.html). Replace with
+    /// document-level actions.
+    override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        super.willOpenMenu(menu, with: event)
+        let unwanted: Set<String> = [
+            "WKMenuItemIdentifierReload", "WKMenuItemIdentifierGoBack", "WKMenuItemIdentifierGoForward",
+        ]
+        for item in menu.items where unwanted.contains(item.identifier?.rawValue ?? "") {
+            menu.removeItem(item)
+        }
+        if let first = menu.items.first, first.isSeparatorItem { menu.removeItem(first) }
+        if !menu.items.isEmpty, menu.items.last?.isSeparatorItem == false { menu.addItem(.separator()) }
+        // Target nil: resolved through the responder chain to the window's controller.
+        menu.addItem(withTitle: "Reveal in Finder",
+                     action: #selector(DocumentWindowController.revealInFinder(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Copy Path",
+                     action: #selector(DocumentWindowController.copyPath(_:)), keyEquivalent: "")
+    }
+
+    // MARK: Drag and drop
+
+    /// Dropped markdown/text files open as documents. Anything else falls
+    /// through to WebKit, which would otherwise navigate the page away.
+    private func droppedDocuments(_ sender: NSDraggingInfo) -> [URL] {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL]
+        return (urls ?? []).filter(\.isDocumentLike)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        droppedDocuments(sender).isEmpty ? super.draggingEntered(sender) : .copy
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        droppedDocuments(sender).isEmpty ? super.draggingUpdated(sender) : .copy
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        droppedDocuments(sender).isEmpty ? super.prepareForDragOperation(sender) : true
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let urls = droppedDocuments(sender)
+        guard !urls.isEmpty else { return super.performDragOperation(sender) }
+        onDropFiles?(urls)
+        return true
+    }
+
     func loadRenderer() {
         guard let root = Bundle.main.resourceURL?.appendingPathComponent("web") else {
             NSLog("xem: web resources missing from bundle")
@@ -127,12 +238,12 @@ final class MarkdownWebView: WKWebView {
 
     /// `baseDir` lets the page resolve relative image paths against the document,
     /// not against the bundle's web root.
-    func render(markdown text: String, baseDir: String) {
+    func render(markdown text: String, baseDir: String, fragment: String? = nil) {
         guard isReady else {
-            pending = (text, baseDir)
+            pending = (text, baseDir, fragment)
             return
         }
-        let payload = ["markdown": text, "baseDir": baseDir]
+        let payload = ["markdown": text, "baseDir": baseDir, "fragment": fragment ?? ""]
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8)
         else { return }
@@ -147,9 +258,10 @@ extension MarkdownWebView: WKNavigationDelegate {
         isReady = true
         applyTextScale()
         applyFindColors()
+        applyOutline()
         if let pending {
             self.pending = nil
-            render(markdown: pending.text, baseDir: pending.baseDir)
+            render(markdown: pending.text, baseDir: pending.baseDir, fragment: pending.fragment)
         }
     }
 
@@ -163,11 +275,35 @@ extension MarkdownWebView: WKNavigationDelegate {
             decisionHandler(.allow)
             return
         }
-        if action.navigationType == .linkActivated, url.scheme == "http" || url.scheme == "https" {
+        // Anything with a real scheme (http, mailto, ...) belongs to the system.
+        // Relative and file links never get here: app.js intercepts them.
+        if action.navigationType == .linkActivated, let scheme = url.scheme, scheme != "file" {
             NSWorkspace.shared.open(url)
             decisionHandler(.cancel)
             return
         }
         decisionHandler(.allow)
+    }
+}
+
+/// Keeps the web view from being retained by its own content controller.
+private final class ScriptBridge: NSObject, WKScriptMessageHandler {
+    weak var owner: MarkdownWebView?
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        owner?.handleScriptMessage(message.body)
+    }
+}
+
+extension URL {
+    static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn"]
+
+    var isMarkdown: Bool { Self.markdownExtensions.contains(pathExtension.lowercased()) }
+
+    /// Something Xem can display: markdown, or any plain-text file.
+    var isDocumentLike: Bool {
+        if isMarkdown { return true }
+        guard let type = UTType(filenameExtension: pathExtension) else { return false }
+        return type.conforms(to: .plainText)
     }
 }
