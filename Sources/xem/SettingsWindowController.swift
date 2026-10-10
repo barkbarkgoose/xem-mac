@@ -13,6 +13,8 @@ final class SettingsWindowController: NSWindowController {
     private var scaled: [(control: NSControl, base: CGFloat, bold: Bool)] = []
     private let sizeValue = NSTextField(labelWithString: "")
     private let sizeStepper = NSStepper()
+    private let appearanceControl = NSSegmentedControl()
+    private let widthPopup = NSPopUpButton(frame: .zero, pullsDown: false)
 
     init() {
         let window = PopupWindow(
@@ -64,6 +66,27 @@ final class SettingsWindowController: NSWindowController {
         let sizeControls = NSStackView(views: [sizeValue, sizeStepper])
         sizeControls.spacing = 8
 
+        // Appearance: [ System | Light | Dark ]
+        appearanceControl.segmentCount = AppearancePreference.allCases.count
+        for (index, option) in AppearancePreference.allCases.enumerated() {
+            appearanceControl.setLabel(option.title, forSegment: index)
+        }
+        appearanceControl.trackingMode = .selectOne
+        appearanceControl.selectedSegment = AppearancePreference.allCases.firstIndex(of: .current) ?? 0
+        appearanceControl.target = self
+        appearanceControl.action = #selector(appearanceChanged(_:))
+        scaled.append((appearanceControl, NSFont.systemFontSize, false))
+
+        // Column width: Narrow ... Full Width
+        widthPopup.addItems(withTitles: ContentWidth.allCases.map(\.title))
+        widthPopup.selectItem(at: ContentWidth.current.rawValue)
+        widthPopup.target = self
+        widthPopup.action = #selector(widthChanged(_:))
+        scaled.append((widthPopup, NSFont.systemFontSize, false))
+        NotificationCenter.default.addObserver(
+            forName: ContentWidth.didChange, object: nil, queue: .main
+        ) { [weak self] _ in self?.widthPopup.selectItem(at: ContentWidth.current.rawValue) }
+
         wells = slots.enumerated().map { index, slot in
             let well = NSColorWell(style: .default)
             well.color = FindColors.color(slot.0, slot.1)
@@ -79,17 +102,27 @@ final class SettingsWindowController: NSWindowController {
         let grid = NSGridView(views: [
             [label("Interface", bold: true), NSGridCell.emptyContentView, NSGridCell.emptyContentView],
             [label("Text size"), sizeControls, NSGridCell.emptyContentView],
+            [label("Appearance"), appearanceControl, NSGridCell.emptyContentView],
+            [label("Document", bold: true), NSGridCell.emptyContentView, NSGridCell.emptyContentView],
+            [label("Column width"), widthPopup, NSGridCell.emptyContentView],
             [label("Find highlights", bold: true), label("All matches"), label("Current match")],
             [label("Light appearance"), wells[0], wells[1]],
             [label("Dark appearance"), wells[2], wells[3]],
         ])
-        grid.mergeCells(inHorizontalRange: NSRange(location: 1, length: 2), verticalRange: NSRange(location: 1, length: 1))
+        // Rows 1, 2 and 4 (text size, appearance, column width) span the two
+        // value columns.
+        for row in [1, 2, 4] {
+            grid.mergeCells(inHorizontalRange: NSRange(location: 1, length: 2), verticalRange: NSRange(location: row, length: 1))
+        }
         grid.rowSpacing = 12
         grid.columnSpacing = 24
-        grid.row(at: 2).topPadding = 10
+        grid.row(at: 3).topPadding = 10
+        grid.row(at: 5).topPadding = 10
         grid.column(at: 1).xPlacement = .center
         grid.column(at: 2).xPlacement = .center
         grid.cell(atColumnIndex: 1, rowIndex: 1).xPlacement = .leading
+        grid.cell(atColumnIndex: 1, rowIndex: 2).xPlacement = .leading
+        grid.cell(atColumnIndex: 1, rowIndex: 4).xPlacement = .leading
 
         let reset = NSButton(title: "Reset to Defaults", target: self, action: #selector(resetTapped))
         scaled.append((reset, NSFont.systemFontSize, false))
@@ -134,6 +167,14 @@ final class SettingsWindowController: NSWindowController {
         UIFontSize.scale = sender.doubleValue / 100
     }
 
+    @objc private func widthChanged(_ sender: NSPopUpButton) {
+        ContentWidth.current = ContentWidth(rawValue: sender.indexOfSelectedItem) ?? .standard
+    }
+
+    @objc private func appearanceChanged(_ sender: NSSegmentedControl) {
+        AppearancePreference.current = AppearancePreference.allCases[sender.selectedSegment]
+    }
+
     @objc private func wellChanged(_ sender: NSColorWell) {
         let (role, appearance) = slots[sender.tag]
         FindColors.set(sender.color, role, appearance)
@@ -145,5 +186,8 @@ final class SettingsWindowController: NSWindowController {
             well.color = FindColors.themeDefault(slot.0, slot.1)
         }
         UIFontSize.scale = 1.0
+        AppearancePreference.current = .system
+        appearanceControl.selectedSegment = 0
+        ContentWidth.current = .standard
     }
 }

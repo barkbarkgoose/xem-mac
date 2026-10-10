@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var controllers: [String: DocumentWindowController] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppearancePreference.apply()
         buildMenu()
         installTabKeyMonitor()
     }
@@ -265,6 +266,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         viewMenu.addItem(withTitle: "Actual Size", action: #selector(MarkdownWebView.textZoomReset(_:)), keyEquivalent: "0")
         viewMenu.addItem(withTitle: "Zoom In", action: #selector(MarkdownWebView.textZoomIn(_:)), keyEquivalent: "+")
         viewMenu.addItem(withTitle: "Zoom Out", action: #selector(MarkdownWebView.textZoomOut(_:)), keyEquivalent: "-")
+        viewMenu.addItem(.separator())
+        // Text column width. Option-Cmd brackets, to stay clear of Cmd +/-
+        // (text zoom) and the system's Option-Cmd +/- screen zoom.
+        let wider = viewMenu.addItem(withTitle: "Wider Column", action: #selector(MarkdownWebView.widerColumn(_:)), keyEquivalent: "]")
+        wider.keyEquivalentModifierMask = [.command, .option]
+        let narrower = viewMenu.addItem(withTitle: "Narrower Column", action: #selector(MarkdownWebView.narrowerColumn(_:)), keyEquivalent: "[")
+        narrower.keyEquivalentModifierMask = [.command, .option]
+        let defaultWidth = viewMenu.addItem(withTitle: "Default Column Width", action: #selector(MarkdownWebView.resetColumnWidth(_:)), keyEquivalent: "0")
+        defaultWidth.keyEquivalentModifierMask = [.command, .option]
         viewMenu.addItem(.separator())
         let outline = viewMenu.addItem(withTitle: "Show Outline", action: #selector(DocumentWindowController.toggleOutline(_:)), keyEquivalent: "o")
         outline.keyEquivalentModifierMask = [.command, .shift]

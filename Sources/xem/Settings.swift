@@ -58,6 +58,88 @@ enum FindColors {
     }
 }
 
+/// How wide the document's text column may get. Stepped, shared by every window
+/// and remembered, like text zoom. Widths are rem so they scale with that zoom:
+/// zooming out and choosing a wider level is how you see more text per line.
+enum ContentWidth: Int, CaseIterable {
+    case narrow, standard, medium, wide, extraWide, full
+
+    static let didChange = Notification.Name("xem.contentWidthDidChange")
+    private static let key = "contentWidth"
+
+    static var current: ContentWidth {
+        get {
+            let saved = UserDefaults.standard.object(forKey: key) as? Int
+            return saved.flatMap(Self.init(rawValue:)) ?? .standard
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: key)
+            NotificationCenter.default.post(name: didChange, object: nil)
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .narrow: return "Narrow"
+        case .standard: return "Default"
+        case .medium: return "Medium"
+        case .wide: return "Wide"
+        case .extraWide: return "Extra Wide"
+        case .full: return "Full Width"
+        }
+    }
+
+    /// CSS value for `--content-width`.
+    var css: String {
+        switch self {
+        case .narrow: return "36rem"
+        case .standard: return "46rem"
+        case .medium: return "60rem"
+        case .wide: return "80rem"
+        case .extraWide: return "110rem"
+        case .full: return "none"
+        }
+    }
+
+    static func step(_ delta: Int) {
+        let next = min(max(current.rawValue + delta, 0), allCases.count - 1)
+        current = ContentWidth(rawValue: next) ?? .standard
+    }
+}
+
+/// Light, dark, or follow macOS. Applied as `NSApp.appearance`, which drives the
+/// native panels and (through the web view's effective appearance) the page's
+/// `prefers-color-scheme`, so the CSS, highlight.js, Mermaid and the per-
+/// appearance find colors all follow without further wiring.
+enum AppearancePreference: String, CaseIterable {
+    case system, light, dark
+
+    private static let key = "appearance"
+
+    static var current: AppearancePreference {
+        get { UserDefaults.standard.string(forKey: key).flatMap(Self.init(rawValue:)) ?? .system }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: key)
+            apply()
+        }
+    }
+
+    var title: String { rawValue.capitalized }
+
+    /// nil means "follow the system".
+    private var appearance: NSAppearance? {
+        switch self {
+        case .system: return nil
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
+        }
+    }
+
+    static func apply() {
+        NSApp.appearance = current.appearance
+    }
+}
+
 /// Size of Xem's own interface text (find bar, search and switcher panels,
 /// shortcuts, settings, the outline sidebar). Separate from the in-document
 /// text zoom (Cmd +/-), which only scales the rendered markdown. The menu bar

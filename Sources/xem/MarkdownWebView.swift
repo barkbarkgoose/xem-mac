@@ -47,6 +47,9 @@ final class MarkdownWebView: WKWebView {
         NotificationCenter.default.addObserver(
             forName: UIFontSize.didChange, object: nil, queue: .main
         ) { [weak self] _ in self?.applyUIScale() }
+        NotificationCenter.default.addObserver(
+            forName: ContentWidth.didChange, object: nil, queue: .main
+        ) { [weak self] _ in self?.applyContentWidth() }
     }
 
     deinit {
@@ -59,6 +62,16 @@ final class MarkdownWebView: WKWebView {
 
     @objc func textZoomIn(_ sender: Any?) { adjustTextScale(by: Self.scaleStep) }
     @objc func textZoomOut(_ sender: Any?) { adjustTextScale(by: -Self.scaleStep) }
+    // Column width is shared by every window; each web view applies it itself.
+    @objc func widerColumn(_ sender: Any?) { ContentWidth.step(1) }
+    @objc func narrowerColumn(_ sender: Any?) { ContentWidth.step(-1) }
+    @objc func resetColumnWidth(_ sender: Any?) { ContentWidth.current = .standard }
+
+    private func applyContentWidth() {
+        guard isReady, let json = Self.jsonString(ContentWidth.current.css) else { return }
+        evaluateJavaScript("window.xem.setContentWidth(\(json));", completionHandler: nil)
+    }
+
     @objc func textZoomReset(_ sender: Any?) {
         textScale = 1.0
         applyTextScale()
@@ -267,6 +280,7 @@ extension MarkdownWebView: WKNavigationDelegate {
         applyTextScale()
         applyFindColors()
         applyUIScale()
+        applyContentWidth()
         applyOutline()
         if let pending {
             self.pending = nil

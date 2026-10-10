@@ -419,6 +419,13 @@
       return findStatus();
     },
     scrollToId: scrollToId,
+    /// Cap on the text column: a CSS length ("60rem") or "none" for the whole
+    /// window. Reflowing moves every heading, so keep the reader's place.
+    setContentWidth: function (width) {
+      var anchor = captureAnchor();
+      document.documentElement.style.setProperty('--content-width', width || '46rem');
+      restoreAnchor(anchor);
+    },
     /// Interface (not document) text scale; see --ui-scale in theme.css.
     setUIScale: function (scale) {
       document.documentElement.style.setProperty('--ui-scale', String(scale));

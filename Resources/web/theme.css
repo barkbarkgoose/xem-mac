@@ -62,7 +62,9 @@ body {
 }
 
 #content {
-  max-width: 46rem;
+  /* Set from app.js (View > Wider/Narrower Column). rem, so it scales with the
+     text zoom; "none" is full width. */
+  max-width: var(--content-width, 46rem);
   margin: 0 auto;
   padding: 2.5rem 2rem 6rem;
 }
