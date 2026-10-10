@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
+        installTabKeyMonitor()
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -42,6 +43,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if panel.runModal() == .OK, let url = panel.url { openDocument(url) }
     }
 
+    private func findItem(
+        _ title: String, _ action: NSTextFinder.Action, key: String, mods: NSEvent.ModifierFlags
+    ) -> NSMenuItem {
+        let item = NSMenuItem(
+            title: title, action: #selector(NSResponder.performTextFinderAction(_:)), keyEquivalent: key)
+        item.keyEquivalentModifierMask = mods
+        item.tag = action.rawValue
+        return item
+    }
+
+    /// Tab switching keys. A local monitor runs before the web view sees the
+    /// event, so WebKit cannot claim Cmd-Shift-Arrow for text selection, and
+    /// Ctrl-Tab works regardless of which view has focus.
+    private func installTabKeyMonitor() {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let window = NSApp.keyWindow
+            switch (event.keyCode, mods) {
+            case (124, [.command, .shift]),  // right arrow
+                 (48, [.control]):           // tab
+                window?.selectNextTab(nil)
+            case (123, [.command, .shift]),  // left arrow
+                 (48, [.control, .shift]):
+                window?.selectPreviousTab(nil)
+            default:
+                return event
+            }
+            return nil
+        }
+    }
+
     private func buildMenu() {
         let main = NSMenu()
 
@@ -65,6 +97,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let editMenu = NSMenu(title: "Edit")
         editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenu.addItem(.separator())
+        // WKWebView implements the system find bar; the item's tag picks the action.
+        editMenu.addItem(findItem("Find…", .showFindInterface, key: "f", mods: .command))
+        editMenu.addItem(findItem("Find Next", .nextMatch, key: "g", mods: .command))
+        editMenu.addItem(findItem("Find Previous", .previousMatch, key: "g", mods: [.command, .shift]))
+        editMenu.addItem(findItem("Use Selection for Find", .setSearchString, key: "e", mods: .command))
         editItem.submenu = editMenu
         main.addItem(editItem)
 
@@ -77,6 +115,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         viewMenu.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
         viewItem.submenu = viewMenu
         main.addItem(viewItem)
+
+        // Without a Window menu there is no way to re-merge windows into tabs
+        // (Merge All Windows) once a tab has been dragged out.
+        let windowItem = NSMenuItem()
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        windowMenu.addItem(.separator())
+        // Shown with Cmd-Shift-Arrow; Ctrl-Tab / Ctrl-Shift-Tab are handled by
+        // `installTabKeyMonitor`, which also pre-empts WebKit's own use of Cmd-Shift-Arrow.
+        let arrow = { (key: Int) in String(UnicodeScalar(UInt32(key))!) }
+        let next = windowMenu.addItem(withTitle: "Show Next Tab", action: #selector(NSWindow.selectNextTab(_:)), keyEquivalent: arrow(NSRightArrowFunctionKey))
+        next.keyEquivalentModifierMask = [.command, .shift]
+        let prev = windowMenu.addItem(withTitle: "Show Previous Tab", action: #selector(NSWindow.selectPreviousTab(_:)), keyEquivalent: arrow(NSLeftArrowFunctionKey))
+        prev.keyEquivalentModifierMask = [.command, .shift]
+        windowMenu.addItem(withTitle: "Show/Hide Tab Bar", action: #selector(NSWindow.toggleTabBar(_:)), keyEquivalent: "")
+        windowMenu.addItem(withTitle: "Move Tab to New Window", action: #selector(NSWindow.moveTabToNewWindow(_:)), keyEquivalent: "")
+        windowMenu.addItem(withTitle: "Merge All Windows", action: #selector(NSWindow.mergeAllWindows(_:)), keyEquivalent: "")
+        windowMenu.addItem(.separator())
+        windowMenu.addItem(withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
+        windowItem.submenu = windowMenu
+        main.addItem(windowItem)
+        NSApp.windowsMenu = windowMenu
 
         NSApp.mainMenu = main
     }

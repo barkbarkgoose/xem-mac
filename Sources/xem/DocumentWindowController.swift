@@ -5,6 +5,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
     private let webView = MarkdownWebView()
     private var watcher: FileWatcher?
     private var onClose: ((DocumentWindowController) -> Void)?
+    private var didEnsureTabBar = false
 
     init(url: URL, onClose: @escaping (DocumentWindowController) -> Void) {
         self.url = url
@@ -59,6 +60,17 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+
+        // Show the tab bar even for a lone window: AppKit hides it by default,
+        // and a hidden bar is not a drop target, so a dragged-out tab could
+        // never be dropped back. Only on first show, so View > Hide Tab Bar
+        // sticks for the window afterwards.
+        if !didEnsureTabBar {
+            didEnsureTabBar = true
+            if let window, window.tabGroup?.isTabBarVisible == false {
+                window.toggleTabBar(nil)
+            }
+        }
     }
 
     private func reload() {
