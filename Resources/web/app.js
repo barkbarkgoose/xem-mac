@@ -42,12 +42,32 @@
   // Tag every block with its source line range ("start:end", 0-based, end
   // exclusive). Global search uses it to land on the right rendered match.
   md.core.ruler.push('source_lines', function (state) {
+    var offset = (state.env && state.env.lineOffset) || 0;
     state.tokens.forEach(function (token) {
       if (token.map && token.block && token.nesting !== -1 && token.type !== 'inline') {
-        token.attrSet('data-line', token.map[0] + ':' + token.map[1]);
+        token.attrSet('data-line', (token.map[0] + offset) + ':' + (token.map[1] + offset));
       }
     });
   });
+
+  // A leading `---` ... `---` (or `...`) YAML block is metadata, not content.
+  // Shown as a highlighted block instead of being parsed as hr + setext heading.
+  // The body is rendered with a line offset so data-line stays in source terms.
+  function renderWithFrontmatter(src) {
+    var m = /^﻿?---[ \t]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(src);
+    if (!m) return md.render(src);
+    var consumed = m[0];
+    var lines = consumed.split('\n').length - (/\n$/.test(consumed) ? 1 : 0);
+    var yaml = m[1];
+    var html;
+    try {
+      html = hljs.highlight(yaml, { language: 'yaml', ignoreIllegals: true }).value;
+    } catch (e) {
+      html = escapeHtml(yaml);
+    }
+    return '<pre class="frontmatter" data-line="0:' + lines + '"><code class="hljs language-yaml">' +
+      html + '</code></pre>' + md.render(src.slice(consumed.length), { lineOffset: lines });
+  }
 
   function tagPre(html, token) {
     if (!token.map || html.indexOf('<pre') !== 0) return html;
@@ -457,7 +477,7 @@
       // The old marks die with the old DOM; reapplyFind rebuilds them below.
       findMarks = [];
       findIndex = -1;
-      content.innerHTML = md.render(payload.markdown || '');
+      content.innerHTML = renderWithFrontmatter(payload.markdown || '');
       buildOutline();
       rewriteRelativePaths(content, payload.baseDir);
 

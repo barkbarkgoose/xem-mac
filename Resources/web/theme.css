@@ -250,3 +250,8 @@ body.outline-open { padding-left: var(--outline-width); }
   h1, h2, h3, h4, h5, h6 { break-after: avoid; }
   mark.xem-find, mark.xem-find-active { background: none; outline: 0; }
 }
+
+pre.frontmatter code.hljs {
+  background: none;
+  padding: 0;
+}
