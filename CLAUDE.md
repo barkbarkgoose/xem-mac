@@ -43,8 +43,8 @@ XEM_SNAPSHOT_LIGHT=1 ./build/Xem.app/Contents/MacOS/xem --snapshot some.md /tmp/
 - Every markdown-it block carries `data-line="start:end"` (source lines). All-tabs search (`GlobalSearchWindowController`, Cmd-Shift-F) searches each document's source natively, then `window.xem.findAtSourceLine` maps a source line to the rendered match using those attributes.
 - The outline sidebar is HTML inside the page (`#outline`, toggled by `body.outline-open`), not a native split view, so the web view stays the window's content view. It is app chrome: sized in px times `--ui-scale` (Settings > Interface text size, `UIFontSize`), deliberately not rem, so it does not follow the document's Cmd +/- zoom. Native panels read `UIFontSize` and re-apply on `UIFontSize.didChange`.
 - Printing/PDF use `WKWebView.printOperation` with `@media print` in `theme.css` (always light; `hljs-dark.css` is `screen`-only). The print view needs an explicit frame or output is blank.
-- `scripts/xem` is the CLI launcher: resolves `Xem.app` (`$XEM_APP`, next to the script/Cellar, then `/Applications`), writes stdin to a temp file if piped, and calls `open -a`.
-- `Formula/xem.rb` is the Homebrew formula; it is mirrored by hand into a separate `homebrew-tap` repo. The repo is private, so the formula's `head` uses SSH and `brew install --HEAD` is required until the repo is public and the stable `sha256` is filled in. `making-brew-work.md` (untracked) is a scratch troubleshooting log.
+- Terminal viewer (`TerminalViewer.swift`, `xem --term file.md`): an offscreen `MarkdownWebView` sized to the terminal's text area in points (cell size and scale come from iTerm2's `OSC 1337;ReportCellSize`), scrolled with `window.scrollBy` and drawn with iTerm2's `OSC 1337;File=` inline-image protocol over all rows but the status line. Small scrolls move in whole rows: the terminal shifts what it already shows (scroll region + `CSI S`/`CSI T`, which carries iTerm2's image cells) and only the exposed rows are snapshotted and sent; full-view repaints (hundreds of KB each) per wheel tick made iTerm2 stutter. Jumps, reloads, resizes and clamped scrolls at either end repaint fully (`XEM_TERM_FULL_FRAMES=1` forces that; `XEM_TERM_TRACE=<path>` logs frame timing). It redraws when `app.js` posts `{type:'rendered'}` (from `afterRender`, so after Mermaid) and coalesces key repeat so only one snapshot is in flight. `scripts/xem --attach` opens an iTerm2 tab (AppleScript) running `--term`.
+- `scripts/xem` is the CLI launcher: resolves `Xem.app` (`$XEM_APP`, then `/Applications`), writes stdin to a temp file if piped, and calls `open -a`.
 
 ## Gotchas (already solved; don't regress)
 
@@ -57,4 +57,4 @@ XEM_SNAPSHOT_LIGHT=1 ./build/Xem.app/Contents/MacOS/xem --snapshot some.md /tmp/
 
 ## Releasing
 
-Bump `VERSION` in the `Makefile`, tag `vX.Y.Z` and push tags, update `url` and `sha256` in `Formula/xem.rb`, then copy the formula into the tap repo.
+Bump `VERSION` in the `Makefile`, tag `vX.Y.Z` and push tags. Installation is `make install` only; Homebrew distribution was dropped.

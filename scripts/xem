@@ -2,44 +2,40 @@
 # Open a markdown file (or piped markdown) in Xem.app.
 set -euo pipefail
 
-# Locate the app bundle. Homebrew installs it alongside this script inside the
-# Cellar, so look there first; fall back to a normal /Applications install.
+# Locate the app bundle: $XEM_APP if set (e.g. a dev build), else the
+# `make install` copy in /Applications.
 resolve_app() {
-    if [ -n "${XEM_APP:-}" ]; then
-        [ -d "$XEM_APP" ] || return 1
-        printf '%s' "$XEM_APP"
-        return
-    fi
-
-    # Follow symlinks to this script's real location (BSD readlink has no -f).
-    local src="${BASH_SOURCE[0]}" dir
-    while [ -L "$src" ]; do
-        dir="$(cd -P "$(dirname "$src")" && pwd)"
-        src="$(readlink "$src")"
-        [[ $src != /* ]] && src="$dir/$src"
-    done
-    dir="$(cd -P "$(dirname "$src")" && pwd)"
-
-    for candidate in "$dir/../Xem.app" "$dir/../../Xem.app" "/Applications/Xem.app"; do
-        if [ -d "$candidate" ]; then
-            printf '%s' "$(cd "$candidate" && pwd)"
-            return
-        fi
-    done
-    return 1
+    local app="${XEM_APP:-/Applications/Xem.app}"
+    [ -d "$app" ] || return 1
+    printf '%s' "$(cd "$app" && pwd)"
 }
 
 if ! APP="$(resolve_app)"; then
     if [ -n "${XEM_APP:-}" ]; then
         echo "xem: XEM_APP is set to '$XEM_APP', which is not an app bundle." >&2
     else
-        echo "xem: Xem.app not found (looked next to this script and in /Applications)." >&2
+        echo "xem: /Applications/Xem.app not found." >&2
         echo "         Set XEM_APP to its path, or run 'make install'." >&2
     fi
     exit 1
 fi
 
-usage() { echo "usage: xem <file.md> | xem -   (or pipe into xem)" >&2; exit 2; }
+usage() {
+    cat >&2 <<'EOF'
+usage: xem [--attach | --term] <file.md>
+       xem [--attach | --term] -      (or pipe into xem)
+
+  --attach   view in a new iTerm2 tab instead of a window
+  --term     view in this terminal (iTerm2 inline images)
+EOF
+    exit 2
+}
+
+mode="window"
+case "${1:-}" in
+    --attach|-a) mode="attach"; shift ;;
+    --term|-t)   mode="term"; shift ;;
+esac
 
 target=""
 
@@ -68,4 +64,41 @@ else
     abs="$(cd "$(dirname "$target")" && pwd)/$(basename "$target")"
 fi
 
-exec open -a "$APP" "$abs"
+BIN="$APP/Contents/MacOS/xem"
+
+# Single-quote one argument for iTerm2, which splits a session command itself
+# (shell-style quoting, but no shell).
+quote() {
+    local escaped
+    escaped="$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+    printf "'%s'" "$escaped"
+}
+
+case "$mode" in
+    term)
+        exec "$BIN" --term "$abs"
+        ;;
+    attach)
+        if ! osascript -e 'id of application "iTerm"' >/dev/null 2>&1; then
+            echo "xem: --attach needs iTerm2; opening a window instead." >&2
+            exec open -a "$APP" "$abs"
+        fi
+        cmd="$(quote "$BIN") --term $(quote "$abs")"
+        exec osascript - "$cmd" >/dev/null <<'APPLESCRIPT'
+on run argv
+    set cmd to item 1 of argv
+    tell application "iTerm"
+        if (count of windows) is 0 then
+            create window with default profile command cmd
+        else
+            tell current window to create tab with default profile command cmd
+        end if
+        activate
+    end tell
+end run
+APPLESCRIPT
+        ;;
+    *)
+        exec open -a "$APP" "$abs"
+        ;;
+esac
