@@ -14,29 +14,6 @@ editor, and the window re-renders on every save.
 
 ## Install
 
-```sh
-brew install --HEAD barkbarkgoose/tap/xem
-```
-
-`--HEAD` is required: `xem-mac` is a private repo, so the tagged source tarball
-that the stable formula points at is not fetchable and its `sha256` is still a
-placeholder. Installing therefore needs repo access and a working SSH key. Drop
-the flag once the repo is public and the sha is filled in.
-
-Homebrew compiles it locally, which means Gatekeeper is never involved — there is
-no "unidentified developer" prompt to click through, because locally built code is
-never quarantined.
-
-To open `.md` files from Finder, link the app into `/Applications`:
-
-```sh
-ln -sfn "$(brew --prefix)/opt/xem/Xem.app" /Applications/Xem.app
-```
-
-Then right-click any `.md` → Get Info → Open With → Xem → Change All.
-
-### From source
-
 Requires Command Line Tools only. **Xcode is not needed**, and there is deliberately
 no `.xcodeproj` — `xcodebuild` will not work here.
 
@@ -46,15 +23,26 @@ make install-cli   # symlink the `xem` launcher into ~/.local/bin
 make set-default   # optional: claim the .md association
 ```
 
+Re-run `make install` after pulling changes. Because the app is built locally, it is
+never quarantined, so Gatekeeper doesn't prompt about an unidentified developer.
+
 ## Usage
 
 ```sh
 xem notes.md         # open a file
 xem -                # read markdown from stdin
 some-command | xem   # same
+xem --attach notes.md   # view in a new iTerm2 tab (e.g. `:!xem --attach %` from nvim)
+xem --term notes.md     # view in the current terminal
 ```
 
 Reopening a file that is already open focuses its window instead of duplicating it.
+
+`--attach` and `--term` render through the same WebKit pipeline offscreen and show it
+with iTerm2's inline images, one screenful at a time, still live-reloading on save.
+Keys: `j`/`k`/arrows/wheel scroll, `space`/`b` page, `d`/`u` half page, `g`/`G` top/end,
+`r` repaint, `o` open in a Xem window, `q` quit. It's a picture, so there's no text
+selection, links or find.
 
 ## Layout
 
@@ -64,10 +52,10 @@ Reopening a file that is already open focuses its window instead of duplicating 
 | `Sources/xem/MarkdownWebView.swift` | `WKWebView` host and the JS bridge. |
 | `Sources/xem/DocumentWindowController.swift` | One window per document. |
 | `Sources/xem/Snapshot.swift` | `--snapshot in.md out.png`, for verification. |
+| `Sources/xem/TerminalViewer.swift` | `--term`: page through the render in iTerm2. |
 | `Resources/web/app.js` | markdown-it pipeline, mermaid, KaTeX, scroll restore. |
 | `Resources/web/theme.css` | Palette and layout. |
 | `scripts/make-plist.sh` | Generates `Info.plist`, including the UTI claims. |
-| `Formula/xem.rb` | Homebrew formula, mirrored into the tap repo. |
 
 ## Notes on three things that are easy to get wrong
 
@@ -97,21 +85,14 @@ XEM_SNAPSHOT_LIGHT=1 ./build/Xem.app/Contents/MacOS/xem --snapshot some.md /tmp/
 
 `--snapshot` renders offscreen through the real WebKit pipeline and writes a PNG, so
 Mermaid, KaTeX and layout can be checked without opening a window. It needs a
-WindowServer, so it is not usable from CI or a Homebrew sandbox.
+WindowServer, so it is not usable from CI.
 
 ## Releasing
 
-1. Bump `VERSION` in the `Makefile` and tag: `git tag v0.1.1 && git push --tags`
-2. Update `url` and `sha256` in `Formula/xem.rb`:
-   ```sh
-   curl -sL https://github.com/barkbarkgoose/xem-mac/archive/refs/tags/v0.1.1.tar.gz | shasum -a 256
-   ```
-3. Copy the formula into the `homebrew-tap` repo and push.
+Bump `VERSION` in the `Makefile` and tag: `git tag v0.1.1 && git push --tags`
 
 ## Uninstall
 
 ```sh
-brew uninstall xem           # if installed via brew
-rm -f /Applications/Xem.app  # the symlink, if you made one
-make uninstall               # if installed from source
+make uninstall   # removes /Applications/Xem.app and the ~/.local/bin/xem link
 ```

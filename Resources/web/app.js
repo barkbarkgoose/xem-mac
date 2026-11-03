@@ -360,6 +360,8 @@
     reapplyFind();
     updateOutlineActive();
     if (payloadFragment) scrollToId(payloadFragment);
+    // The terminal viewer (--term) waits for this before capturing a frame.
+    try { window.webkit.messageHandlers.xem.postMessage({ type: 'rendered' }); } catch (e) {}
   }
 
   /// A save re-renders the page; keep the active search alive across it.

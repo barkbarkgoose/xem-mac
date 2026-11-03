@@ -14,6 +14,8 @@ final class MarkdownWebView: WKWebView {
     var onOpenLink: ((_ url: URL, _ fragment: String?) -> Void)?
     /// Files were dropped on the page.
     var onDropFiles: (([URL]) -> Void)?
+    /// A render (diagrams and math included) has settled.
+    var onRendered: (() -> Void)?
 
     private static let scaleKey = "textScale"
     private static let scaleRange = 0.5...3.0
@@ -181,6 +183,10 @@ final class MarkdownWebView: WKWebView {
 
     fileprivate func handleScriptMessage(_ body: Any) {
         guard let message = body as? [String: Any] else { return }
+        if message["type"] as? String == "rendered" {
+            onRendered?()
+            return
+        }
         if message["type"] as? String == "toggleOutline" {
             toggleOutline()
             return
